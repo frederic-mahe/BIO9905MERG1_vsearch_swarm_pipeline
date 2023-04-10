@@ -7,6 +7,14 @@ bibendum felis dictum sodales.
 print("hello")
 ```
 
+try to execute bash code:
+
+``` code
+:::bash
+
+bash --version
+```
+
 ## Pyout
 
 ``` code
@@ -20,7 +28,3 @@ console.log("hello");
 ```
 
 ## Image
-
-This image ![the moon](example15.png) will be
-included as a cell attachment.
-
