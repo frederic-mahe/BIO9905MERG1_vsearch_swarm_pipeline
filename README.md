@@ -1,2 +1,3 @@
-# BIO9905MERG1_vsearch_swarm_pipeline
+# Oslo 2023: vsearch-swarm pipeline
+
 A vsearch, cutadapt and swarm-based pipeline for metabarcoding data
