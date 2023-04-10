@@ -1,0 +1,36 @@
+#+TITLE: Oslo
+#+DATE:[2023-04-10 lun.]
+#+LANGUAGE: en
+#+PROPERTY: header-args  :tangle yes
+#+PROPERTY: header-args+ :tangle-mode (identity #o755)
+#+PROPERTY: header-args+ :no-expand
+
+
+* Requirements and dependencies
+
+You will need to install [[https://github.com/torognes/vsearch][vsearch]], [[https://github.com/marcelm/cutadapt/][cutadapt]], [[https://github.com/torognes/swarm][swarm]], and [[https://github.com/tobiasgf/lulu][lulu]].
+
+I will assume that you also have [[https://www.python.org/][python]] (version 3.5 or more), [[https://cran.r-project.org/][R]]
+(version 3.5 or more), and [[https://www.gnu.org/software/bash/][bash]] (version 4 or more).
+
+#+BEGIN_SRC sh
+  #!/usr/bin/env bash
+
+  # check software versions
+  for SOFT in bash R python3 swarm vsearch cutadapt ; do
+      "${SOFT}" --version 2>&1 | head -n 1
+      echo
+  done
+#+END_SRC
+
+* TODO Quality checks
+
+#+BEGIN_SRC sh
+  for FASTA in ./data/*.fas ; do
+      cat ${FASTA}
+  done
+#+END_SRC
+
+*** plot
+
+sub-level
