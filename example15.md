@@ -10,7 +10,7 @@ print("hello")
 try to execute bash code:
 
 ``` code
-:::bash
+%%shell
 
 bash --version
 ```
