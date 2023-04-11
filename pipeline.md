@@ -12,8 +12,9 @@ gcc --version
 uname -a
 ```
 
-Runtime seems to be based on Ubuntu LTS 20.04. The `gcc` version is old
-(9.2) and does not allow to compile `mumu` locally.
+Runtime seems to be based on Ubuntu LTS 20.04 (not the more recent LTS
+22.04). The `gcc` version is old (9.2) and does not allow to compile
+`mumu` locally.
 
 
 ## Requirements and dependencies
@@ -30,7 +31,7 @@ or more), and [bash](https://www.gnu.org/software/bash/) (version 4 or
 more).
 
 
-``` {.bash}
+``` {code .bash}
 %%shell
 
 mkdir -p src data results
@@ -40,6 +41,12 @@ git clone https://github.com/torognes/swarm.git
 cd ./swarm/
 make
 ```
+
+``` {code .bash}
+
+uname -a
+```
+
 
 
 ``` {.bash}
