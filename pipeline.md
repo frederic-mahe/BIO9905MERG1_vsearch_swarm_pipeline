@@ -4,14 +4,16 @@
 
 Let's explore the environment:
 
-Runtime seems to be based on Ubuntu LTS 20.04. The `gcc` version is old
-(9.2) and does not allow to compile `mumu` locally.
+``` code
+%%shell
 
-``` {.bash}
 git --version
 gcc --version
 uname -a
 ```
+
+Runtime seems to be based on Ubuntu LTS 20.04. The `gcc` version is old
+(9.2) and does not allow to compile `mumu` locally.
 
 
 ## Requirements and dependencies
