@@ -5,6 +5,19 @@ open questions:
 - wget fastq files from GitHub,
 - all code blocks are launched from $HOME and not from the latest
   folder?
+- update: `extract_expected_error_values()` can be simplified with
+  vsearch 2.23
+
+
+## aim
+
+A fast and accurate pipeline.
+
+Contrary to traditional pipelines, most filtering steps are done
+post-clustering, where the risk of eliminating real molecular
+diversity is minimized.
+
+Please feel free to ask questions at anytime.
 
 
 ## Google Colab
@@ -18,20 +31,39 @@ date
 whoami
 ```
 
-We are root! Maximal clearance level.
+We are `root`! Maximal clearance level, we can do anything we want.
 
-Check version numbers:
+Check OS version:
 
 ``` code
 %%shell
 
+lsb_release -a
 uname -a
+```
+
+The operating system is Ubuntu LTS 20.04. LTS stands for long-term
+support, the most recent LTS at the time of writing is 22.04. Version
+20.04 will be supported until April 2025.
+
+
+Check basic utilities:
+
+``` code
+%%shell
+
 bash --version
 git --version
 gcc --version
 python --version
 R --version
 ```
+
+R, Git and the compilation toolchain are already installed.
+
+The `gcc` version is a bit old (9.2), and might not allow to compile
+code based on very recent standards (e.g.; `mumu` wich uses C++20
+features).
 
 What about hardware resources?
 
@@ -44,52 +76,85 @@ cat /proc/meminfo
 ```
 
 It seems that Google colab instances are virtual x86-64 machines with
-2 CPU-cores, 16 GB of RAM and 80 GB of storage space. The operating
-system is Ubuntu LTS 20.04. LTS stands for long-term support, the most
-recent LTS at the time of writing is 22.04. Version 20.04 will be
-supported until April 2025. Its `gcc` version is a bit old (9.2), and
-might not allow to compile code based on very recent standards (e.g.;
-`mumu` wich uses C++20 features).
+2 CPU-cores (Intel Xeon @ 2.20GHz), 12 GB of RAM and 85 GB of storage
+space.
 
 I will assume that you also have [python](https://www.python.org/)
-(version 3.5 or more), [R](https://cran.r-project.org/) (version 3.5
+(version 3.7 or more), [R](https://cran.r-project.org/) (version 4.0
 or more), and [bash](https://www.gnu.org/software/bash/) (version 4 or
 more).
 
-Git and compilation tools are already installed.
+Is it possible to pass data from one `shell` code block to another?
 
-Is it possible to 
+``` code
+%%shell
 
-Note: it seems that in `%%shell` code blocks, `cd` moves, variable
+pwd
+mkdir -p tmp
+cd ./tmp/0
+pwd
+i=5
+export j=5
+```
+
+``` code
+%%shell
+pwd
+echo "i="$i
+echo "j="$j
+```
+
+It seems that in `%%shell` code blocks, `cd` moves, variable
 declarations, and function declarations are limited to the current
 block (no effect on downstream code blocks).
+
+
+## install dependencies
 
 Let's create some folders:
 
 ``` code
 %%shell
 
-mkdir -p src data results
+mkdir -p src data references results
 ```
 
-
-## install dependencies
-
-You will need to install
+We will need to install
 [vsearch](https://github.com/torognes/vsearch),
 [cutadapt](https://github.com/marcelm/cutadapt/), and
 [swarm](https://github.com/torognes/swarm).
 
+Installing [lulu](https://github.com/tobiasgf/lulu) or
+[mumu](https://github.com/frederic-mahe/mumu) is not necessary in this
+particular pipeline.
+
+
 ### install cutadapt
 
-using conda
-
-...
+We could install the Ubuntu version:
 
 ``` code
 %%shell
 
+apt update
 apt search cutadapt
+```
+
+but it is a bit old. Let's install `cutadapt` with `pip`:
+
+``` code
+%%shell
+
+python3 -m pip install --upgrade pip
+python3 -m pip install --upgrade cutadapt
+```
+
+check:
+
+``` code
+%%shell
+
+cutadapt --version
 ```
 
 
@@ -97,81 +162,125 @@ apt search cutadapt
 
 We could install `swarm` and `vsearch` using `conda`, but for
 educational purposes, let's compile them ourselves. We will put their
-source code in the `src` folder:
+source code in the `/tmp` folder (cleaned during each reboot):
 
 ``` code
 %%shell
 
-(cd ./src/
- git clone https://github.com/torognes/swarm.git
- cd ./swarm/
- make
-)
+cd /tmp/
+git clone https://github.com/torognes/swarm.git
+cd ./swarm/
+make --jobs
+make install
 ```
+
+check:
 
 ``` code
 %%shell
 
-./src/swarm/bin/swarm --version
+swarm --version
 ```
+
+clean-up:
+
+``` code
+%%shell
+
+rm --recursive /tmp/swarm/
+```
+
 
 ### install vsearch
 
 ``` code
 %%shell
 
-(cd ./src/
- git clone https://github.com/torognes/vsearch.git
- cd ./vsearch/
- ./autogen.sh
- ./configure CFLAGS="-O3" CXXFLAGS="-O3"
- make
-)
+cd /tmp/
+git clone https://github.com/torognes/vsearch.git
+cd ./vsearch/
+./autogen.sh
+./configure CFLAGS="-O3" CXXFLAGS="-O3"
+make --jobs
+
 ```
+
+check:
 
 ``` code
 %%shell
 
-./src/vsearch/bin/vsearch --version
+vsearch --version
 ```
 
-Installing [lulu](https://github.com/tobiasgf/lulu) or
-[mumu](https://github.com/frederic-mahe/mumu) is not necessary.
+clean-up:
+
+``` code
+%%shell
+
+rm --recursive /tmp/vsearch/
+```
+
+### install python scripts
+
+In the second part of the pipeline, we are going to use python scripts
+to build and update occurrence tables, and to compute last-common
+ancestor taxonomic assignments.
+
+The scripts are available on GitHub, let's download the latest
+versions:
+
+``` code
+%%shell
+
+cd ./src/
+
+## occurrence table creation
+URL="https://raw.githubusercontent.com/frederic-mahe/fred-metabarcoding-pipeline/master/src"
+wget "${URL}/OTU_cleaver.py"
+wget "${URL}/OTU_contingency_table_filtered.py"
+wget "${URL}/OTU_table_updater.py"
+
+## taxonomic assignment
+URL="https://raw.githubusercontent.com/frederic-mahe/stampa/master"
+wget "${URL}/stampa_merge.py"
+```
 
 
-## dataset
+## sequencing data
 
 A subset of the Neotropical Forest Soil dataset
 ([PRJNA317860](https://www.ebi.ac.uk/ena/browser/view/PRJNA317860);
 [Mahé et al., 2017](https://doi.org/10.1038/s41559-017-0091)),
-corresponding to the following run accessions:
+corresponding to the following ENA/SRA run accessions:
 
-```
-SRR23272700
-SRR23272716
-SRR23272737
-SRR23272741
-SRR23272752
-SRR23272767
-SRR23272778
-SRR23272788
-SRR23272799
-SRR23272803
-SRR23272822
-SRR23272833
-SRR23272848
-SRR23272859
-SRR23272860
-SRR23272861
-SRR23272874
-SRR23272881
-SRR23272890
-SRR23272901
-```
+runs        | sample
+------------|-------
+SRR23272700 | B070
+SRR23272716 | B030
+SRR23272737 | B100
+SRR23272741 | B060
+SRR23272752 | B050
+SRR23272767 | L040
+SRR23272778 | L030
+SRR23272788 | B090
+SRR23272799 | B080
+SRR23272803 | B040
+SRR23272822 | L080
+SRR23272833 | L070
+SRR23272848 | L020
+SRR23272859 | L010
+SRR23272860 | B020
+SRR23272861 | B010
+SRR23272874 | L090
+SRR23272881 | L100
+SRR23272890 | L060
+SRR23272901 | L050
+
 
 and subsampled at 1%, using `vsearch`:
 
-```bash
+```shell
 
 function subsample() {
     local -ri SEED=1
@@ -193,38 +302,834 @@ export -f subsample
 find . -name "NG-7070_*.fastq.gz" -type f -exec bash -c 'subsample "$0"' {} \;
 ```
 
+This is a very powerful and robust way to find and subsample all fastq
+files (it will find every file, including files in sub-folders). You
+might be more familiar with a loop-based approach:
+
+```shell
+for FASTQ in "NG-7070_*.fastq.gz" ; do
+    subsample "${FASTQ}"
+done
+```
+
 Note: in a pair of R1 and R2 fastq files, both files have the same
 number of reads, so using a fix seed (not zero) guarantees that
 subsamplings results for both R1 and R2 fastq files are identical
 (same number of reads, same reads, in the same order)
 
-
-## aim
-
-Mention some of vsearch\'s lesser known features such as **sff to
-fastq** conversion. I\'d also like to demonstrate how our tools can be
-piped (`|`) together to create seamless pipelines. I also had in mind
-the creation of a reference database from scratch for taxonomic
-assignment.
-
-
-## checks
-==================================
+These 20 runs represent 4 GB of compressed data. To save time and
+energy, we are going to download the subsampled files directly
+(roughly 40 MB in total). The files are hosted on my GitHub account:
 
 ``` code
 %%shell
-for FASTA in ./data/*.fas ; do
-    cat ${FASTA}
+
+cd ./data/
+
+URL="https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/data"
+
+wget "${URL}/MD5SUM"
+for SAMPLE in B010 B020 B030 B040 B050 B060 B070 B080 B090 B100 L010 L020 L030 L040 L050 L060 L070 L080 L090 L100 ; do
+    for READ in 1 2 ; do
+        wget "${URL}/${SAMPLE}_1_${READ}.fastq.gz"
+    done
 done
 ```
+
+check:
 
 ``` code
 %%shell
-#!/usr/bin/env bash
 
-# check software versions
-for SOFT in bash R python3 swarm vsearch cutadapt ; do
-    "${SOFT}" --version 2>&1 | head -n 1
-    echo
-done
+cd ./data/
+md5sum -c MD5SUM
 ```
+
+Initial situation: fastq files are already demultiplexed, we have a
+pair of R1 and R2 files for each sample.
+
+
+## Part 1: from fastq files to fasta files
+
+The pipeline is divided into two parts. A first part where each sample
+is processed individually. And a second part where samples are pooled
+to produce an occurrence table.
+
+In this first part of the pipeline, we will:
+1. merge R1 and R2,
+1. trim primers,
+1. convert fastq to fasta,
+1. extract expected errors (for a later *quality-based filtering*),
+1. dereplicate fasta,
+1. per-sample clustering (for a later *cluster cleaving*)
+
+The code below uses named pipes (`fifo`) to avoid writing intermediate
+results to mass storage. The goal is to speed up processing, and to
+make the code more modular and clearer. On the other hand, `fifo`s are
+tricky to use, as you must remember to launch producers and consumers
+in the backgroup before running the last consumer.
+
+Don't panic! While the script is running, we are going to look at each
+function and explain what it does:
+
+``` code
+%%shell
+
+cd ./data/
+export LC_ALL=C
+
+## ------------------------------------------------------------ define variables
+declare -r PRIMER_F="CCAGCASCYGCGGTAATTCC"
+declare -r PRIMER_R="ACTTTCGTTCTTGATYRA"
+declare -r FASTQ_NAME_PATTERN="*_1.fastq.gz"
+declare -ri THREADS=2
+declare -r CUTADAPT_OPTIONS="--minimum-length 32 --cores=${THREADS} --discard-untrimmed"
+declare -r CUTADAPT="$(which cutadapt) ${CUTADAPT_OPTIONS}"  # cutadapt 4.1 or more recent
+declare -r SWARM="$(which swarm)"  # swarm 3.0 or more recent
+declare -r VSEARCH="$(which vsearch) --quiet"  # vsearch 2.21.1 or more recent
+declare -ri ENCODING=33
+declare -r MIN_F=$(( ${#PRIMER_F} * 2 / 3 ))  # match is >= 2/3 of primer length
+declare -r MIN_R=$(( ${#PRIMER_R} * 2 / 3 ))
+declare -r FIFOS=$(echo fifo_{merged,trimmed}_fastq fifo_filtered_fasta{,_bis})
+declare -i TICKER=0
+
+## ------------------------------------------------------------------- functions
+revcomp() {
+    # reverse-complement a DNA/RNA IUPAC string
+    [[ -z "${1}" ]] && { echo "error: empty string" ; exit 1 ; }
+    local -r nucleotides="acgturykmbdhvswACGTURYKMBDHVSW"
+    local -r complements="tgcaayrmkvhdbswTGCAAYRMKVHDBSW"
+    tr "${nucleotides}" "${complements}" <<< "${1}" | rev
+}
+
+merge_fastq_pair() {
+    ${VSEARCH} \
+        --threads "${THREADS}" \
+        --fastq_mergepairs "${FORWARD}" \
+        --reverse "${REVERSE}" \
+        --fastq_ascii "${ENCODING}" \
+        --fastq_allowmergestagger \
+        --fastqout fifo_merged_fastq 2> "${SAMPLE}.log" &
+}
+
+trim_primers() {
+    # search forward primer in both normal and revcomp: now all reads
+    # are in the same orientation
+    ${CUTADAPT} \
+        --revcomp \
+        --front "${PRIMER_F};rightmost" \
+        --overlap "${MIN_F}" fifo_merged_fastq 2>> "${SAMPLE}.log" | \
+        ${CUTADAPT} \
+            --adapter "${ANTI_PRIMER_R}" \
+            --overlap "${MIN_R}" \
+            --max-n 0 - > fifo_trimmed_fastq 2>> "${SAMPLE}.log" &
+}
+
+convert_fastq_to_fasta() {
+    # use SHA1 values as sequence names,
+    # compute expected error values (ee)
+    ${VSEARCH} \
+        --fastq_filter fifo_trimmed_fastq \
+        --relabel_sha1 \
+        --fastq_ascii "${ENCODING}" \
+        --eeout \
+        --fasta_width 0 \
+        --fastaout - 2>> "${SAMPLE}.log" | \
+        tee fifo_filtered_fasta_bis > fifo_filtered_fasta &
+}
+
+extract_expected_error_values() {
+    # extract ee for future quality filtering (keep the lowest
+    # observed expected error value for each unique sequence)
+    local -ri length_of_sequence_IDs=40
+    paste - - < fifo_filtered_fasta_bis | \
+        awk 'BEGIN {FS = "[>;=\t]"} {print $2, $4, length($NF)}' | \
+        sort --key=3,3n --key=1,1d --key=2,2n | \
+        uniq --check-chars=${length_of_sequence_IDs} > "${SAMPLE}.qual" &
+}
+
+dereplicate_fasta() {
+    # dereplicate and discard expected error values (ee)
+    ${VSEARCH} \
+        --derep_fulllength fifo_filtered_fasta \
+        --sizeout \
+        --fasta_width 0 \
+        --xee \
+        --output "${SAMPLE}.fas" 2>> "${SAMPLE}.log"
+}
+
+list_local_clusters() {
+    # retain only clusters with more than 2 reads
+    # (do not use the fastidious option here)
+    ${SWARM} \
+        --threads "${THREADS}" \
+        --differences 1 \
+        --usearch-abundance \
+        --log /dev/null \
+        --output-file /dev/null \
+        --statistics-file - \
+        "${SAMPLE}.fas" | \
+        awk 'BEGIN {FS = OFS = "\t"} $2 > 2' > "${SAMPLE}.stats"
+}
+
+## ------------------------------------------------------------------------ main
+# from raw fastq files to ready-to-use sample files
+declare -r ANTI_PRIMER_R="$(revcomp "${PRIMER_R}")"
+find . -name "${FASTQ_NAME_PATTERN}" -type f -print0 | \
+    while IFS= read -r -d '' FORWARD ; do
+        TICKER=$(( $TICKER + 1 ))
+        echo -e "${TICKER}\t${FORWARD}"
+        REVERSE="${FORWARD/_1\./_2.}"  # adapt to fastq name patterns
+        SAMPLE="${FORWARD/_1_1.*/}"
+
+        # clean (remove older files, if any)
+        rm --force "${SAMPLE}".{fas,qual,log,stats} ${FIFOS}
+        mkfifo ${FIFOS}
+
+        merge_fastq_pair
+        trim_primers
+        convert_fastq_to_fasta
+        extract_expected_error_values
+        dereplicate_fasta
+        list_local_clusters
+
+        # clean (make sure fifos are not reused)
+        rm ${FIFOS}
+        unset FORWARD REVERSE SAMPLE
+    done
+```
+
+To adapt this code to another dataset, you just need to change the
+primer sequences in the initial block of variables, and the raw fastq
+file search pattern and sample file naming if your raw fastq files
+follow another naming rule (in the final `while` loop).
+
+### variable declarations
+
+```shell
+
+VAR1="some text"
+declare -r VAR1="more text"
+declare -ri VAR2=42
+```
+
+Here, we are using `declare -r` to indicate that `VAR1` is a
+constant. If we try to modify it somewhere in the code, that's a bug,
+and the execution will stop with an error message.
+
+`declare -ri` indicates that `VAR2` is a constant integer.
+
+
+### R1 and R2 merging
+
+```shell
+merge_fastq_pair() {
+    ${VSEARCH} \
+        --threads "${THREADS}" \
+        --fastq_mergepairs "${FORWARD}" \
+        --reverse "${REVERSE}" \
+        --fastq_ascii "${ENCODING}" \
+        --fastq_allowmergestagger \
+        --fastqout fifo_merged_fastq 2> "${SAMPLE}.log" &
+}
+```
+
+before merging:
+
+```
+R1: ADAPTOR-TAG-PRIMER_FORWARD-actual_target_sequen
+                                               ||||
+                                               quence-ESREVER_REMIRP-GAT-ROTPADA :R2
+```
+
+after merging:
+
+```
+ADAPTOR-TAG-PRIMER_FORWARD-actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
+```
+
+A minimal overlap and similarity is required for the merging. Reads
+that can't be merged are discarded. `vsearch` re-computes the quality
+values of the overlaping positions (double observations, the error
+probability must be re-evaluated).
+
+
+### reverse-complement
+
+```shell
+revcomp() {
+    # reverse-complement a DNA/RNA IUPAC string
+    [[ -z "${1}" ]] && { echo "error: empty string" ; exit 1 ; }
+    local -r nucleotides="acgturykmbdhvswACGTURYKMBDHVSW"
+    local -r complements="tgcaayrmkvhdbswTGCAAYRMKVHDBSW"
+    tr "${nucleotides}" "${complements}" <<< "${1}" | rev
+}
+```
+
+That function takes a primer sequence, for example
+`ACTTTCGTTCTTGATYRA` and outputs the reverse-complement of that
+sequence (`TYRATCAAGAACGAAAGT`). This is useful when searching for
+primers after merging.
+
+
+After merging, the reverse primer is reverse-complemented.
+
+```
+ADAPTOR-TAG-PRIMER_FORWARD-actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
+```
+
+
+### trim primers
+
+After merging, we use cutadapt to trim primers:
+
+```shell
+trim_primers() {
+    # search forward primer in both normal and revcomp: now all reads
+    # are in the same orientation
+    ${CUTADAPT} \
+        --revcomp \
+        --front "${PRIMER_F};rightmost" \
+        --overlap "${MIN_F}" fifo_merged_fastq 2>> "${SAMPLE}.log" | \
+        ${CUTADAPT} \
+            --adapter "${ANTI_PRIMER_R}" \
+            --overlap "${MIN_R}" \
+            --max-n 0 - > fifo_trimmed_fastq 2>> "${SAMPLE}.log" &
+}
+```
+
+Before:
+
+```
+ADAPTOR-TAG-PRIMER_FORWARD-actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
+```
+
+the first call removes the *rightmost* forward primer (and everything
+before):
+
+```
+actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
+```
+
+the second call removes the reverse primer (and everything after).
+
+```
+actual_target_sequence
+```
+
+At either step, if a primer is not found, the read is discarded.
+
+
+`--revcomp`: some sequencing protocols can produce reads in random
+orientations (R1 contains a mix of forward and reverse reads). That
+option has the effect of re-orienting the reads.
+
+`--overlap`: by default, cutadapt considers that an overlap of three
+nucleotides is enough for a match. Here we require a minimal overlap
+equal to 2/3rd of the length of our primers.
+
+```
+Match:
+
+   MER_FORWARD-actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
+   |||||||||||
+PRIMER_FORWARD
+
+
+No Match
+          WARD-actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
+          ||||
+PRIMER_FORWARD
+```
+
+Note: `--max-n 0` reads with uncertain nucleotides (`N`) are
+discarded.
+
+
+### convert fastq to fasta
+
+A simple format conversion:
+
+```shell
+convert_fastq_to_fasta() {
+    # use SHA1 values as sequence names,
+    # compute expected error values (ee)
+    ${VSEARCH} \
+        --fastq_filter fifo_trimmed_fastq \
+        --relabel_sha1 \
+        --fastq_ascii "${ENCODING}" \
+        --eeout \
+        --fasta_width 0 \
+        --fastaout - 2>> "${SAMPLE}.log" | \
+        tee fifo_filtered_fasta_bis > fifo_filtered_fasta &
+}
+```
+
+For example, a fastq entry such as:
+
+```
+@s1
+AAAA
++
+IIII
+```
+
+will be transformed into a fasta entry, with a sequence-derived name
+(hash value of the sequence), and the computed expected error (later
+used for quality filtering):
+
+```
+>e2512172abf8cc9f67fdd49eb6cacf2df71bbad3;ee=0.0004000
+AAAA
+```
+
+### extract expected error values
+
+Extract and store read lengths and expected error values (later used
+for quality filtering). If two reads have the exact same sequence,
+keep the best (lowest) expected error.
+
+```shell
+extract_expected_error_values() {
+    # extract ee for future quality filtering (keep the lowest
+    # observed expected error value for each unique sequence)
+    local -ri length_of_sequence_IDs=40
+    paste - - < fifo_filtered_fasta_bis | \
+        awk 'BEGIN {FS = "[>;=\t]"} {print $2, $4, length($NF)}' | \
+        sort --key=3,3n --key=1,1d --key=2,2n | \
+        uniq --check-chars=${length_of_sequence_IDs} > "${SAMPLE}.qual" &
+}
+```
+
+That function could be simplified now that `vsearch` 2.23 can add
+length attributes `;length=123` to fastq and fasta headers.
+
+
+### dereplicate
+
+The first significant lossless reduction of our dataset! In
+metabarcoding datasets, some sequences are rare and only observed
+once, whereas some sequences are present in many exact copies. When
+coded correctly, finding identical sequences is a very fast and
+efficient operation:
+
+
+```shell
+dereplicate_fasta() {
+    # dereplicate and discard expected error values (ee)
+    ${VSEARCH} \
+        --derep_fulllength fifo_filtered_fasta \
+        --sizeout \
+        --fasta_width 0 \
+        --xee \
+        --output "${SAMPLE}.fas" 2>> "${SAMPLE}.log"
+}
+```
+
+For instance, this fasta file:
+
+```
+>e2512172abf8cc9f67fdd49eb6cacf2df71bbad3;ee=0.0004000
+AAAA
+>e2512172abf8cc9f67fdd49eb6cacf2df71bbad3;ee=0.0004000
+AAAA
+```
+
+will be dereplicated into this one:
+
+```
+>e2512172abf8cc9f67fdd49eb6cacf2df71bbad3;size=2
+AAAA
+```
+
+Note that expected error values are removed by the `-xee` option, and
+that a new attribute `;size=2` has been added to represent the fact
+that this particular sequence has been observed twice.
+
+
+### list local clusters
+
+Later in this analysis, we will need to search for cluster
+co-occurences on a per-sample basis. We quickly generate clusters and
+a list of cluster seeds with `swarm` and store the results (reminder:
+everything is done at the sample level in that first part of the
+pipeline). Here we use `swarm` for the first time, I will give more
+details when `swarm` will be used to process the whole dataset (pooled
+samples), in the second part of the pipeline.
+
+```shell
+list_local_clusters() {
+    # retain only clusters with more than 2 reads
+    # (do not use the fastidious option here)
+    ${SWARM} \
+        --threads "${THREADS}" \
+        --differences 1 \
+        --usearch-abundance \
+        --log /dev/null \
+        --output-file /dev/null \
+        --statistics-file - \
+        "${SAMPLE}.fas" | \
+        awk 'BEGIN {FS = OFS = "\t"} $2 > 2' > "${SAMPLE}.stats"
+}
+```
+
+Here, `swarm` reads a fasta file, representing a sample, and produces
+a table looking like that:
+
+uniq| abundance | seed | abundance| singletons|layers|steps
+----|-----|----------------------------------------|----|----|-|-
+5897|22010|3db68d2f77252793f23d7089d0d4103eb8942dcb|3612|4600|8|8
+5528|15548|45211af6b7811bf45b5d3694054b800b5b13efd4|3728|4488|9|9
+3058|13452|47e639615ad19c8dededae45f38beb52c4e9861d|3542|2252|9|9
+2172|8268|307ab3d7f513adc74854dd72e817fe02f7601db2|3722|1639|8|8
+1453|6754|e52a67c43758a5f9a39b4cb42ac10cf41958e1d4|3563|1053|4|4
+1437|8836|962e2976f63ec09db8361ce4a498f50ade4b1674|3712|1046|4|4
+1303|6307|79ae1f05f177ad948d18dc86a7944772c63273b9|3559|971|6|6
+1126|6032|b0835c4fba3d39e25059371902b0774741e3a57d|3562|748|5|5
+759|5355|91be8585fcad245e9f3a53578207c58355426583|3603|540|4|4
+743|5981|42871cf2b4deaa78cbd1c163847567685c56d44e|3654|567|4|4
+
+In the second part of the pipeline, we are going to use that table as
+a list of sequences that played the role of cluster seeds in this
+particular sample. Don't worry, that part will be explained in
+details.
+
+
+### loop over each pair of fastq files
+
+Finally, we search for all fastq R1 files (`find`) and we apply our
+functions. If we remove the clutter, it looks like this:
+
+```shell
+find . -name "${FASTQ_NAME_PATTERN}" -type f -print0 | \
+    while IFS= read -r -d '' FORWARD ; do
+        ...
+        merge_fastq_pair
+        trim_primers
+        convert_fastq_to_fasta
+        extract_expected_error_values
+        dereplicate_fasta
+        list_local_clusters
+        ...
+    done
+```
+
+That's it for the first part of the pipeline!
+
+
+## taxonomic references
+
+Before tackling the second part of the pipeline, we need to prepare
+our reference database for the taxonomic assignment of our
+environmental sequences.
+
+We are working with 18S V4 amplicons. We could use Silva SSU, but
+[PR2](https://github.com/pr2database/pr2database), the Protist
+Ribosomal Reference database, is a well-curated and eukaryote specific
+database of SSU (18S) references. Let's use the latest version (5.0),
+published earlier this month:
+
+``` code
+%%shell
+
+cd ./references/
+
+revcomp() {
+    # reverse-complement a DNA/RNA IUPAC string
+    [[ -z "${1}" ]] && { echo "error: empty string" ; exit 1 ; }
+    local -r nucleotides="acgturykmbdhvswACGTURYKMBDHVSW"
+    local -r complements="tgcaayrmkvhdbswTGCAAYRMKVHDBSW"
+    tr "${nucleotides}" "${complements}" <<< "${1}" | rev
+}
+
+## download PR2 (UTAX version)
+declare -r URL="https://github.com/pr2database/pr2database/releases/download"
+declare -r VERSION="5.0.0"
+declare -r SOURCE="pr2_version_${VERSION}_SSU_UTAX.fasta"
+[[ -e "${SOURCE}.gz" ]] || wget "${URL}/v${VERSION}/${SOURCE}.gz"
+
+
+## extract the V4 region (primers from Stoeck et al. 2010)
+declare -r PRIMER_F="CCAGCASCYGCGGTAATTCC"
+declare -r PRIMER_R="ACTTTCGTTCTTGATYRA"
+declare -r ANTI_PRIMER_R="$(revcomp "${PRIMER_R}")"
+declare -r OUTPUT="${SOURCE/_UTAX*/}_${PRIMER_F}_${PRIMER_R}.fas"
+declare -r LOG="${OUTPUT/.fas/.log}"
+declare -r MIN_LENGTH="32"
+declare -r ERROR_RATE="0.2"
+declare -r MIN_F=$(( ${#PRIMER_F} * 1 / 3 ))
+declare -r MIN_R=$(( ${#PRIMER_R} * 1 / 3 ))
+declare -r OPTIONS="--minimum-length ${MIN_LENGTH} --discard-untrimmed --error-rate ${ERROR_RATE}"
+declare -r CUTADAPT="$(which cutadapt) ${OPTIONS}"
+
+zcat "${SOURCE}.gz" | \
+    dos2unix | \
+    sed '/^>MF423350/ s/s:Heterocapsa steinii/s:Heterocapsa steinii/
+         /^>/ s/;tax=k:/ /
+         /^>/ s/,[dpcofgs]:/|/g
+         /^>/ ! s/U/T/g' | \
+     ${CUTADAPT} \
+         --revcomp \
+         --front "${PRIMER_F}" \
+         --overlap "${MIN_F}" - 2> "${LOG}" | \
+         ${CUTADAPT} \
+         --adapter "${ANTI_PRIMER_R}" \
+         --overlap "${MIN_R}" - > "${OUTPUT}" 2>> "${LOG}"
+```
+
+I won't go into details here, but you might notice some familiar code
+such as `revcomp()` and two calls to `cutadapt`. The goal here is to
+download and trim the reference sequences:
+
+```
+reference 1: xxxxxxxx-PRIMER_F-target_region-PRIMER_R-xxxxx
+reference 2:            IMER_F-target_region-PRIMER_R-xxxxxxxxxxx
+reference 3:                    arget-region-PRIMER_R-xxxxxxxxxxxxxxxxxxxx
+```
+
+Discard references that do not contain our target region (flanked by
+our primers), and trim the primers. The reference dataset is now much
+smaller, and limited to our target region:
+
+```
+reference 1:                   target_region
+reference 2:                   target_region
+```
+
+Note: while preparing this, I've found a small bug in the latest PR2
+release ([weird character in one species
+name](https://github.com/pr2database/pr2database/issues/37))
+
+
+## Part 2: from fasta files to an annotated occurrence table
+
+
+- install python scripts first,
+- fix taxonomic assignment,
+- remove unused variables
+
+``` code
+%%shell
+
+cd ./results/
+export LC_ALL=C
+
+## ------------------------------------------------------------ define variables
+declare -r PROJECT="Neotropical_soils_18S_V4"
+declare -r DATA_FOLDER="../data/"
+declare -r SWARM="$(which swarm)"  # swarm 3.0 or more recent
+declare -r VSEARCH="$(which vsearch)"  # vsearch 2.21 or more recent
+declare -ri THREADS=2
+declare -ri RESOLUTION=1
+declare -ri FILTER=2
+declare -r SRC="../src"
+declare -r OTU_CLEAVER="OTU_cleaver.py"
+declare -r OTU_TABLE_BUILDER="OTU_contingency_table_filtered.py"
+declare -r OTU_TABLE_UPDATER="OTU_table_updater.py"
+declare -r STAMPA_MERGE="stampa_merge.py"
+declare -r DATABASE="../references/pr2_version_5.0.0_SSU_CCAGCASCYGCGGTAATTCC_ACTTTCGTTCTTGATYRA.fas"
+
+## ---------------------------------------------------------- global clustering
+echo "run global clustering and chimera detection..."
+
+## variables and file names
+N_SAMPLES=$(find "${DATA_FOLDER}" -name "*.fas" \
+                -type f ! -empty -print0 | tr -d -c '\0' | wc -m)
+FINAL_FASTA="${PROJECT}_${N_SAMPLES}_samples.fas"
+QUALITY_FILE="${FINAL_FASTA%.*}.qual"
+DISTRIBUTION_FILE="${FINAL_FASTA%.*}.distr"
+POTENTIAL_SUB_SEEDS="${FINAL_FASTA%.*}_per_sample_OTUs.stats"
+LOG="${FINAL_FASTA%.*}.log"
+OUTPUT_SWARMS="${FINAL_FASTA%.*}_${RESOLUTION}f.swarms"
+OUTPUT_LOG="${FINAL_FASTA%.*}_${RESOLUTION}f.log"
+OUTPUT_STATS="${FINAL_FASTA%.*}_${RESOLUTION}f.stats"
+OUTPUT_STRUCT="${FINAL_FASTA%.*}_${RESOLUTION}f.struct"
+OUTPUT_REPRESENTATIVES="${FINAL_FASTA%.*}_${RESOLUTION}f_representatives.fas"
+TAXONOMIC_ASSIGNMENTS="${OUTPUT_REPRESENTATIVES%.*}.results"
+UCHIME_RESULTS="${OUTPUT_REPRESENTATIVES%.*}.uchime"
+UCHIME_LOG="${OUTPUT_REPRESENTATIVES%.*}.log"
+OTU_TABLE="${FINAL_FASTA%.*}.OTU.filtered.cleaved.table"
+OUTPUT_TABLE="${OTU_TABLE%.*}.nosubstringOTUs.table"
+
+## Build expected error file
+find "${DATA_FOLDER}" -name "*.qual" \
+    -type f ! -empty -print0 | \
+    sort -k3,3n -k1,1d -k2,2n --merge --files0-from=- | \
+    uniq --check-chars=40 > "${QUALITY_FILE}" &
+
+
+## Build distribution file (sequence <-> sample relations)
+find "${DATA_FOLDER}" -name "*.fas" \
+    -type f ! -empty -execdir grep -H "^>" '{}' \; | \
+    sed 's/.*\/// ; s/\.fas:>/\t/ ; s/;size=/\t/ ; s/;$//' | \
+    awk 'BEGIN {FS = OFS = "\t"} {print $2, $1, $3}' > "${DISTRIBUTION_FILE}" &
+
+
+## list all cluster seeds of size > 2
+find "${DATA_FOLDER}" -name "*.stats" \
+    -type f ! -empty -execdir grep -H "" '{}' \; | \
+    sed 's/^\.\/// ; s/\.stats:/\t/' > "${POTENTIAL_SUB_SEEDS}" &
+
+
+## global dereplication
+find "${DATA_FOLDER}" -name "*.fas" \
+    -type f ! -empty -execdir cat '{}' + | \
+    "${VSEARCH}" \
+        --derep_fulllength - \
+        --sizein \
+        --sizeout \
+        --log "${LOG}" \
+        --fasta_width 0 \
+        --output "${FINAL_FASTA}"
+
+
+## clustering (swarm 3 or more recent)
+"${SWARM}" \
+    --differences "${RESOLUTION}" \
+    --fastidious \
+    --usearch-abundance \
+    --threads "${THREADS}" \
+    --internal-structure "${OUTPUT_STRUCT}" \
+    --output-file "${OUTPUT_SWARMS}" \
+    --statistics-file "${OUTPUT_STATS}" \
+    --seeds "${OUTPUT_REPRESENTATIVES}" \
+    "${FINAL_FASTA}" 2> "${OUTPUT_LOG}"
+
+
+## fake taxonomic assignment
+grep "^>" "${OUTPUT_REPRESENTATIVES}" | \
+    sed -r 's/^>//
+            s/;size=/\t/
+            s/;?$/\t0.0\tNA\tNA/' > "${TAXONOMIC_ASSIGNMENTS}"
+
+
+## chimera detection
+## discard sequences with an abundance lower than FILTER
+## and search for chimeras
+"${VSEARCH}" \
+    --fastx_filter "${OUTPUT_REPRESENTATIVES}"  \
+    --minsize "${FILTER}" \
+    --fastaout - | \
+    "${VSEARCH}" \
+        --uchime_denovo - \
+        --uchimeout "${UCHIME_RESULTS}" \
+        2> "${UCHIME_LOG}"
+
+
+## ------------------------------------------------------------------- cleaving
+echo "run cleaving..."
+
+## split OTUs
+python3 \
+    "${SRC}/${OTU_CLEAVER}" \
+    --global_stats "${OUTPUT_STATS}" \
+    --per_sample_stats "${POTENTIAL_SUB_SEEDS}" \
+    --struct "${OUTPUT_STRUCT}" \
+    --swarms "${OUTPUT_SWARMS}" \
+    --fasta "${FINAL_FASTA}"
+
+## fake taxonomic assignment
+grep "^>" "${OUTPUT_REPRESENTATIVES}2" | \
+    sed -r 's/^>//
+            s/;size=/\t/
+            s/;?$/\t0.0\tNA\tNA/' > "${OUTPUT_REPRESENTATIVES%.*}.results2"
+
+## chimera detection (only down to the smallest newly cleaved OTU)
+LOWEST_ABUNDANCE=$(sed -rn \
+    '/^>/ s/.*;size=([0-9]+);?/\1/p' \
+    "${OUTPUT_REPRESENTATIVES}2" | \
+    sort -n | \
+    head -n 1)
+
+# sort and filter by abundance (default to an abundance of 1), search
+# for chimeras
+cat "${OUTPUT_REPRESENTATIVES}" "${OUTPUT_REPRESENTATIVES}2" | \
+    "${VSEARCH}" \
+        --sortbysize - \
+        --sizein \
+        --minsize ${LOWEST_ABUNDANCE:-1} \
+        --sizeout \
+        --output - | \
+        "${VSEARCH}" \
+            --uchime_denovo - \
+            --uchimeout "${UCHIME_RESULTS}2" \
+            2> "${OUTPUT_REPRESENTATIVES%.*}.log2"
+
+unset LOWEST_ABUNDANCE
+
+
+## ------------------------------------------------------------ first OTU table
+echo "build first OTU table..."
+
+# build OTU table
+python3 \
+    "${SRC}/${OTU_TABLE_BUILDER}" \
+    --representatives <(cat "${OUTPUT_REPRESENTATIVES}"{,2}) \
+    --stats <(cat "${OUTPUT_STATS}"{,2}) \
+    --swarms <(cat "${OUTPUT_SWARMS}"{,2}) \
+    --chimera <(cat "${UCHIME_RESULTS}"{,2}) \
+    --quality "${QUALITY_FILE}" \
+    --assignments <(cat "${TAXONOMIC_ASSIGNMENTS}"{2,}) \
+    --distribution "${DISTRIBUTION_FILE}" > "${OTU_TABLE}"
+
+
+# extract fasta sequences from OTU table
+awk 'NR > 1 {printf ">"$4";size="$2";\n"$10"\n"}' "${OTU_TABLE}" \
+    > "${OTU_TABLE/.table/.fas}"
+
+
+
+## ------------------------------------------------------- taxonomic assignment
+
+# search for best hits
+${VSEARCH} \
+    --usearch_global "${OTU_TABLE/.table/.fas}" \
+    --db ${DATABASE} \
+    --threads ${THREADS} \
+    --dbmask none \
+    --qmask none \
+    --rowlen 0 \
+    --notrunclabels \
+    --userfields query+id1+target \
+    --maxaccepts 0 \
+    --maxrejects 0 \
+    --top_hits_only \
+    --output_no_hits \
+    --id 0.5 \
+    --iddef 1 \
+    --userout - | \
+    sed 's/;size=/_/ ; s/;//' > hits.representatives
+
+# in case of multi-best hit, find the last-common ancestor
+python ${SRC}/${STAMPA_MERGE} $(pwd)
+
+# sort by decreasing abundance
+sort -k2,2nr -k1,1d results.representatives > representatives.results
+
+cp representatives.results "${OTU_TABLE/.table/.results}"
+
+# clean-up
+# rm results.representatives representatives.results
+
+
+## ----------------------------------------------------------- update OTU table
+echo "build final OTU table..."
+NEW_TABLE=$(mktemp)
+
+python3 \
+    "${SRC}/${OTU_TABLE_UPDATER}" \
+    --old_otu_table "${OTU_TABLE}" \
+    --new_taxonomy "${OTU_TABLE/.table/.results}" \
+    --new_otu_table "${NEW_TABLE}"
+
+# fix OTU sorting
+(head -n 1 "${NEW_TABLE}"
+    tail -n +2 "${NEW_TABLE}" | sort -k2,2nr | nl -n'ln' -w1 | cut --complement -f 2
+) > "${OTU_TABLE}2"
+
+# clean up
+chmod go+r,g-w "${OTU_TABLE}2"
+rm "${NEW_TABLE}"
+```
+
+- explain cleaving (as a complement to lulu: separate similar sequences that do not co-occur)
