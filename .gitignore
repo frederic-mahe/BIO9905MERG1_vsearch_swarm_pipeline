@@ -4,3 +4,4 @@
 *.log
 *.qual
 *.stats
+*.fasta.gz
