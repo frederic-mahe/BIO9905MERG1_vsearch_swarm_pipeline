@@ -1,4 +1,6 @@
-# Pipeline
+# Metabarcoding Pipeline
+
+Frédéric Mahé, April 19th 2023
 
 open questions:
 
@@ -22,6 +24,134 @@ post-clustering, where the risk of eliminating real molecular
 diversity is minimized.
 
 Please feel free to ask questions at anytime.
+
+
+## Part 0: crash-course and set-up
+### shell
+#### code block
+
+My pipeline is made of blocks of shell code:
+
+```shell
+# variables
+THREADS=4
+ENCODING=33
+
+# some comments
+vsearch \
+    --threads ${THREADS} \
+    --fastq_mergepairs R1.fastq.gz \
+    --reverse R2.fastq.gz \
+    --fastq_ascii ${ENCODING} \
+    --fastq_allowmergestagger \
+    --quiet \
+    --fastqout out.fastq
+```
+
+
+#### redirect
+
+```shell
+# basics
+command > output.fastq
+command 2> output.log
+command 2> /dev/null
+command < input.fastq
+
+# but also
+>>  2>>  2>&1  <(...)
+```
+
+Note: I've been writing shell scripts for 15 years, and I may use
+lesser known aspects of bash. Feel free to ask if my code is unclear.
+
+
+#### wrap
+
+``` bash
+# too long to read:
+vsearch --threads 4 --fastq_mergepairs R1.fastq.gz --reverse R2.fastq.gz --fastq_ascii 33 --fastq_allowmergestagger --quiet --fastqout out.fastq
+
+# wrapping makes it more readable:
+vsearch \
+    --threads 4 \
+    --fastq_mergepairs R1.fastq.gz \
+    --reverse R2.fastq.gz \
+    --fastq_ascii 33 \
+    --fastq_allowmergestagger \
+    --quiet \
+    --fastqout out.fastq
+```
+
+
+#### pipe
+
+make data flow
+
+``` bash
+# slow
+command1 input.fastq > tmp1.fastq
+command2 tmp1.fastq > tmp2.fastq
+command3 tmp2.fastq > final_output.fastq
+
+# use pipes to avoid temporary files:
+command1 input.fastq | \
+    command2 | \
+    command3 > final_output.fastq
+```
+
+
+#### tee
+
+``` bash
+# use a tee to save an intermediary result:
+command1 input.fastq | \
+    command2 | \
+    tee output2.fastq | \
+    command3 > final_output.fastq
+```
+
+
+#### test
+
+``` bash
+# create toy-examples:
+printf ">s_1\nA\n"
+
+# use them to test software behavior:
+printf ">s_1\nA\n" | \
+    swarm
+```
+
+Note: documentation rarely is 100% complete, when you have a doubt
+about a tool, create a toy-example to test its behavior
+
+
+### FASTQ format
+
+- [FASTQ](https://en.wikipedia.org/wiki/FASTQ_format#Encoding)
+- most frequent format
+- human-readable
+- can be hard to parse
+- encode quality values (probability of error for each position)
+- encoding type must be guessed
+
+
+```
+@M05074:97:000000000-BPW9G:1:1101:10203:1383 1:N:0:2
+CATAATTTCCTCCGCTTATTGATATGCTTAAGTTCAGCGGGTATCCCTACCTGATCCGAGTTCAACCTAAGAAAGTTGGGGGTTCTGGCGGGTGGACGGCTGAACCCTGTAGCGACAAGTATTACTACGCTTAGAGCCAGACGGCACCGCCACTGCTTTTAAGTGCCGCCGGTACAGCGGGCCCCAAGGCCAAGCAGAGCTTGATTGGTCA
++
+@-A-9EFGFFFFD7BFF7FE9,C9F<EFG99,CEF9,@77+@+CCC@F9FCF9,C@C,,+,8C9<CEF,,,,,,,CF,,+++8FEF9,?+++@+++B++@C+,,B?FE8E,,<+++++3C,CF9DF9>>CFE7,,3=@7,,@++@:FC7BC*CC:,7>DF9,,,,7?*=B*5?*:++7***=?EE3***2;***:*0*/;@C8*<C+*<<+
+```
+note that the quality line starts with a @ ...
+
+Note: Q values are a way to encode on one character numerical values
+ranging from 0 to 40 (usually). These values represent the probability
+of a wrong base calling for that particular position. Q20 means 1% of
+risk, Q30 means 0.1% and Q40 means 0.01%.
+
+In paired-end sequencing, there are two files per sample: R1 and
+R2. Each R1 read has a R2 counterpart.
 
 
 ## Google Colab
@@ -556,7 +686,12 @@ ADAPTOR-TAG-PRIMER_FORWARD-actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
 A minimal overlap and similarity is required for the merging. Reads
 that can't be merged are discarded. `vsearch` re-computes the quality
 values of the overlaping positions (double observations, the error
-probability must be re-evaluated).
+probability must be re-evaluated. Some mergers do it the wrong way).
+
+Note: according to Edgar and Flyvberg (2015) merging is an important
+step that can change radically the apparent diversity profile of a
+community (some popular mergers do not cope well with variable length
+markers).
 
 
 ### reverse-complement
@@ -688,6 +823,15 @@ used for quality filtering):
 AAAA
 ```
 
+Why using hash values as sequence names?
+
+- easy to compute,
+- compact fix length name,
+- readable (you get use to it),
+- a given sequence will always produce the same hash,
+- allows cross-studies comparisons
+
+
 ### extract expected error values
 
 Extract and store read lengths and expected error values (later used
@@ -706,8 +850,23 @@ extract_expected_error_values() {
 }
 ```
 
-```
+The result is a file with three columns:
+1. amplicon name,
+1. lowest expected error observed for that amplicon in that sample,
+1. amplicon length
 
+```
+17765e625e2e3588a21306012dfd8f162b8944b8 0.003813 48
+3dd5e4500bd663e4dd27bf0e2ae5b41cb9eee2b9 0.004051 51
+138408e37cf3c86e025cf6d5f6828eff9dbd1015 0.004448 56
+75f075940a92869137394c5a0b9d06d5c4aad2f6 0.5106 57
+1a8baf082848f50d2019ed162c22e87e02122868 0.004766 60
+3b6f64c93290cee1f1102065ddcb345355e0f223 0.005084 64
+d0b25e99d48fd996dedb179cefae6941c768abb5 0.005322 67
+319f8eb5171101539d3fb7255c3edd500ec5eb6b 0.005481 69
+28d992d5a8900d23be60dee0e07f27872a30f770 0.03710 70
+c7c55f0c514ce8c2a5ee49f02523dadcd96a4109 0.01171 78
+...
 ```
 
 Note: that function could be simplified now that `vsearch` 2.23 can
@@ -952,6 +1111,31 @@ Note: while preparing this, I've found a small bug in the latest PR2
 release ([weird character in one species
 name](https://github.com/pr2database/pr2database/issues/37))
 
+### subsample PR2
+
+With a complete PR2 reference dataset taxonomic assignment would take
+an hour on a Google colab instance. To speed up things, I provide a
+PR2 subset with exactly what we need for that dataset.
+
+``` code
+%%shell
+
+cd ./references/
+
+URL="https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/references"
+LIST="useful_references.list"
+TRIMMED_PR2="pr2_version_5.0.0_SSU_CCAGCASCYGCGGTAATTCC_ACTTTCGTTCTTGATYRA.fas"
+
+wget --continue "${URL}/${LIST}"
+
+grep \
+    --no-group-separator \
+    --after-context=1 \
+    --fixed-strings \
+    --file "${LIST}" \
+    "${TRIMMED_PR2}" > "${TRIMMED_PR2/\.fas/_subset.fas}"
+```
+
 
 ## Part 2: from fasta files to an annotated occurrence table
 
@@ -978,7 +1162,7 @@ declare -r OTU_CLEAVER="OTU_cleaver.py"
 declare -r OTU_TABLE_BUILDER="OTU_contingency_table_filtered.py"
 declare -r OTU_TABLE_UPDATER="OTU_table_updater.py"
 declare -r STAMPA_MERGE="stampa_merge.py"
-declare -r DATABASE="../references/pr2_version_5.0.0_SSU_CCAGCASCYGCGGTAATTCC_ACTTTCGTTCTTGATYRA.fas"
+declare -r DATABASE="../references/pr2_version_5.0.0_SSU_CCAGCASCYGCGGTAATTCC_ACTTTCGTTCTTGATYRA_subset.fas"
 
 ## ---------------------------------------------------------- global clustering
 echo "run global clustering and chimera detection..."
@@ -1192,12 +1376,166 @@ rm "${NEW_TABLE}"
 
 ### pool expected error values
 
-per-sample
+So far we had an expected error value for each unique amplicon in each
+sample. Here, we group them to get an expected error value for each
+unique amplicon in the bioproject:
 
 ```shell
-## Build expected error file
+### Build expected error file
 find "${DATA_FOLDER}" -name "*.qual" \
     -type f ! -empty -print0 | \
     sort -k3,3n -k1,1d -k2,2n --merge --files0-from=- | \
     uniq --check-chars=40 > "${QUALITY_FILE}" &
 ```
+
+The result is a file with three columns:
+1. amplicon name,
+1. lowest expected error observed for that amplicon,
+1. amplicon length
+
+```
+964ab48de96fa2997896c4d80db52e412d5da64d 0.002542 32
+f55456130e6d1a43af8dd89ee58432273d872775 0.002542 32
+4fbd2164d6898278c5981f3a18701d9b44e18a5a 0.002621 33
+88885c6241c729d020f8fffc4f7505bb599e5bf8 0.002621 33
+c4505959d778ac5eb94f4971fe902f9c34c48763 0.002701 34
+dca48a272d66c555b06317af2472455db8140237 0.002780 35
+9f2cd2223ed79292d3317fc50b0060bb1a726296 0.002939 37
+7ceba3f3dee8aaaeac5079b5ee0364e38bf5006e 0.3192 38
+86127aa0eb63c3a047705c09095b2b12a88856d6 0.004934 38
+94b7001f660573b59e33fea8e53da0afb51d9f69 0.007367 38
+...
+```
+
+### pool fasta entries
+
+Note: we need to dereplicate first. This time we use --sizein to take
+into account the results of sample-level dereplications.
+
+
+### clustering
+
+Note: swarm outputs clusters and cluster representatives in fasta
+format. swarm can also output interesting stats and a description of
+the internal structure of the clusters. We are going to use all these
+files.
+
+Note: swarm's log contains a lot of information. The most important
+ones are the number of clusters, the number of unique sequences in the
+largest cluster, and the memory consumption. The term OTU is now used
+to designate 97%-based clusters. In that sense swarm produces ASVs.
+
+### distribution
+
+Already covered?
+
+``` text
+f414cfec8c1cc3973e95e67cff46299a00e8368a	S001	7369
+16b79e33e7897ca08ecaa282dc4b4ba1e6d6b460	S001	679
+ea5b349a8215a8b8ca2de29f0a33087b7c7d5e77	S001	458
+1f51f06217fa2ac348b50fea587702e29bfe1f1c	S001	315
+288366fe126296cb6c6aec488dde3b25a6385d5f	S001	243
+f59d28a1e80d582e07d0b224f07ac6e360a8acef	S001	154
+e74f16e7aaeaae903b09ddb6d9f16c66acd47f9a	S001	139
+be8e83ba27fa599c1eccb416e06131870ba101e6	S001	119
+324f9ad3b7651dbbca36abd62ed9c39238db12c1	S001	98
+2ba9bb0fe66318a974db3a580b23b3b1691f4a54	S001	87
+```
+
+Note: every sequence in the dataset, the samples where it occurs, and
+its abundance in that sample.
+
+
+### Chimera detection
+
+
+Note: vsearch reimplements uchime, the most widely used chimera
+detection tool.
+
+
+```
+vsearch v2.22.1_linux_x86_64, 62.7GB RAM, 8 cores
+https://github.com/torognes/vsearch
+
+Reading file - 100%
+773659 nt in 2091 seqs, min 34, max 503, avg 370
+Masking 100%
+Sorting by abundance 100%
+Counting k-mers 100%
+Detecting chimeras 100%
+Found 399 (19.1%) chimeras, 1666 (79.7%) non-chimeras,
+and 26 (1.2%) borderline sequences in 2091 unique sequences.
+Taking abundance information into account, this corresponds to
+3869 (6.1%) chimeras, 59815 (93.6%) non-chimeras,
+and 221 (0.3%) borderline sequences in 63905 total sequences.
+```
+
+Note: a high number of chimeras. This is usual for long markers such
+as 18S V4. The data loss is small in terms of reads (6.4% in total).
+
+Chimera detection is complex and should be a priority research
+field. There is a new chimera detection algorithm in preparation for
+vsearch!
+
+
+### build filtered occurrence table
+
+Note: eliminate sequences that are not chimeras, in the remaining
+cluster representatives, eliminate those with an abundance of 1. I do
+not recommend to eliminate chimeras before taxonomic assignment. If a
+chimera is 100% identical to a reference sequence, then it is a false
+positive (not a chimera) or a sign that the matching reference should
+be investigated.
+
+
+### Taxonomy: last-common ancestor
+
+if an env sequence is equidistant to several ref sequences, find the
+last-common ancestor (part of the taxonomic path that is common)
+
+```
+1462274 nt in 4001 seqs, min 87, max 466, avg 365
+Counting k-mers 100%
+Creating k-mer index 100%
+Searching 100%
+Matching unique query sequences: 1272 of 1358 (93.67%)
+```
+
+Content of the OTU table:
+1. OTU number
+2. total number of reads
+3. cloud (total number of unique sequences)
+4. amplicon (identifier of the OTU representative)
+5. length (length of the OTU representative)
+6. abundance (abundance of the OTU representative)
+7. chimera (is it a chimera? Yes, No, ?)
+8. spread (number of samples where the OTU occurs)
+9. quality (minimum expected error observed for the OTU representative, divided by sequence length)
+10. sequence (sequence of the OTU representative)
+11. identity (maximum similarity of the OTU representative with reference sequences)
+12. taxonomy (taxonomic assignment of the OTU representative)
+13. references (reference sequences closest to the OTU representative)
+
+
+Taxonomic barchart
+
+![phylum level](./images/Boreal_forest_soils_18SV4_48_samples_phylum_level.png)
+
+
+
+
+## Conclusion
+
+Metabarcoding's main challenge is noise. Bioinformatics can solve part
+of the problem, but robust experimental designs with replicates and
+controls can do wonders.
+
+
+### seed vs cloud
+
+![seed vs cloud](./images/seed_vs_cloud.png) <!-- .element height="50%" width="50%" -->
+
+
+### post-super OTU breaking
+
+![before and after](./images/grasp_nodD_764_samples_1f.stats.before_after_OTU_breaking.png)
