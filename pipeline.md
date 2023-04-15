@@ -8,6 +8,10 @@ open questions:
 - update: `extract_expected_error_values()` can be simplified with
   vsearch 2.23
 
+- some blocks can be executed. Blocks that can't be executed are here
+  to show how certain files were produced. They are not necessary for
+  the pipeline.
+
 
 ## aim
 
@@ -237,13 +241,13 @@ cd ./src/
 
 ## occurrence table creation
 URL="https://raw.githubusercontent.com/frederic-mahe/fred-metabarcoding-pipeline/master/src"
-wget "${URL}/OTU_cleaver.py"
-wget "${URL}/OTU_contingency_table_filtered.py"
-wget "${URL}/OTU_table_updater.py"
+for SCRIPT in "OTU_cleaver" "OTU_contingency_table_filtered" "OTU_table_updater" ; do
+    wget --continue "${URL}/${SCRIPT}.py"
+done
 
 ## taxonomic assignment
 URL="https://raw.githubusercontent.com/frederic-mahe/stampa/master"
-wget "${URL}/stampa_merge.py"
+wget --continue "${URL}/stampa_merge.py"
 ```
 
 
@@ -300,6 +304,7 @@ function subsample() {
 export -f subsample
 
 find . -name "NG-7070_*.fastq.gz" -type f -exec bash -c 'subsample "$0"' {} \;
+
 ```
 
 This is a very powerful and robust way to find and subsample all fastq
@@ -331,7 +336,7 @@ URL="https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/ma
 wget "${URL}/MD5SUM"
 for SAMPLE in B010 B020 B030 B040 B050 B060 B070 B080 B090 B100 L010 L020 L030 L040 L050 L060 L070 L080 L090 L100 ; do
     for READ in 1 2 ; do
-        wget "${URL}/${SAMPLE}_1_${READ}.fastq.gz"
+        wget --continue "${URL}/${SAMPLE}_1_${READ}.fastq.gz"
     done
 done
 ```
@@ -701,8 +706,12 @@ extract_expected_error_values() {
 }
 ```
 
-That function could be simplified now that `vsearch` 2.23 can add
-length attributes `;length=123` to fastq and fasta headers.
+```
+
+```
+
+Note: that function could be simplified now that `vsearch` 2.23 can
+add length attributes `;length=123` to fastq and fasta headers.
 
 
 ### dereplicate
@@ -817,7 +826,49 @@ find . -name "${FASTQ_NAME_PATTERN}" -type f -print0 | \
 That's it for the first part of the pipeline!
 
 
-## taxonomic references
+### trimming and merging success rate?
+
+```code
+%%shell
+
+cd ./data/
+
+# format as a table
+for f in *.log ; do
+    echo -en "${f/\.log/}\t"
+    awk '{if (NR == 1) {printf "%s\t", $1}
+          if (NR == 2) {printf $1"\t"}}' ${f}
+    grep "Reads with adapters" "${f}" | \
+        awk '{printf $4"\t"}' | tr -d ","
+      printf "\n"
+  done
+```
+
+samples | reads | assembled |    F |    R
+--------|-------|-----------|------|-----
+B010    |  3359 |      2109 | 1928 | 1877
+B020    |  6987 |      4191 | 3721 | 3646
+B030    |  5130 |      3371 | 3089 | 2993
+B040    |  7158 |      4502 | 4033 | 3967
+B050    |  2903 |      1931 | 1716 | 1341
+B060    |  7494 |      4337 | 3716 | 3693
+B070    |  1034 |       720 |  611 |  418
+B080    |  8614 |      5703 | 5327 | 5225
+B090    |  9268 |      6005 | 5702 | 5630
+B100    | 11644 |      7301 | 6774 | 6740
+L010    |  6484 |      4101 | 3721 | 3588
+L020    |  3656 |      2392 | 2195 | 2065
+L030    |  3372 |      2084 | 1888 | 1766
+L040    |  7981 |      5127 | 4710 | 4654
+L050    |  8092 |      5377 | 5060 | 4996
+L060    |  7789 |      5167 | 4707 | 4616
+L070    |  7215 |      4777 | 4352 | 4292
+L080    |  3577 |      2207 | 1996 | 1917
+L090    |  7210 |      4291 | 3991 | 3914
+L100    |  8502 |      5470 | 4947 | 4872
+
+
+## Part 1¾: taxonomic references
 
 Before tackling the second part of the pipeline, we need to prepare
 our reference database for the taxonomic assignment of our
@@ -848,6 +899,8 @@ declare -r VERSION="5.0.0"
 declare -r SOURCE="pr2_version_${VERSION}_SSU_UTAX.fasta"
 [[ -e "${SOURCE}.gz" ]] || wget "${URL}/v${VERSION}/${SOURCE}.gz"
 
+## search for non-ASCII characters
+zgrep --color='auto' -P -n '[^\x00-\x7F]' "${SOURCE}.gz"
 
 ## extract the V4 region (primers from Stoeck et al. 2010)
 declare -r PRIMER_F="CCAGCASCYGCGGTAATTCC"
@@ -864,8 +917,7 @@ declare -r CUTADAPT="$(which cutadapt) ${OPTIONS}"
 
 zcat "${SOURCE}.gz" | \
     dos2unix | \
-    sed '/^>MF423350/ s/s:Heterocapsa steinii/s:Heterocapsa steinii/
-         /^>/ s/;tax=k:/ /
+    sed '/^>/ s/;tax=k:/ /
          /^>/ s/,[dpcofgs]:/|/g
          /^>/ ! s/U/T/g' | \
      ${CUTADAPT} \
@@ -902,7 +954,6 @@ name](https://github.com/pr2database/pr2database/issues/37))
 
 
 ## Part 2: from fasta files to an annotated occurrence table
-
 
 - install python scripts first,
 - fix taxonomic assignment,
@@ -1032,7 +1083,7 @@ python3 \
 grep "^>" "${OUTPUT_REPRESENTATIVES}2" | \
     sed -r 's/^>//
             s/;size=/\t/
-            s/;?$/\t0.0\tNA\tNA/' > "${OUTPUT_REPRESENTATIVES%.*}.results2"
+            s/;?$/\t0.0\tNA\tNA/' > "${TAXONOMIC_ASSIGNMENTS}2"
 
 ## chimera detection (only down to the smallest newly cleaved OTU)
 LOWEST_ABUNDANCE=$(sed -rn \
@@ -1133,3 +1184,20 @@ rm "${NEW_TABLE}"
 ```
 
 - explain cleaving (as a complement to lulu: separate similar sequences that do not co-occur)
+- with a complete PR2 reference dataset taxonomic assignment would
+  take an hour on Google colab, to speed up things, I provide a PR2
+  subset with exactly what we need for that dataset,
+
+
+
+### pool expected error values
+
+per-sample
+
+```shell
+## Build expected error file
+find "${DATA_FOLDER}" -name "*.qual" \
+    -type f ! -empty -print0 | \
+    sort -k3,3n -k1,1d -k2,2n --merge --files0-from=- | \
+    uniq --check-chars=40 > "${QUALITY_FILE}" &
+```
