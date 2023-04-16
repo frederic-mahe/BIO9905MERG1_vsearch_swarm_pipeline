@@ -66,7 +66,7 @@ features). Feel free to ask or comment if my code is unclear.
 
 A matter of personal preference:
 
-``` bash
+```shell
 # too long to read:
 vsearch --threads 4 --fastq_mergepairs R1.fastq.gz --reverse R2.fastq.gz --fastq_ascii 33 --fastq_allowmergestagger --quiet --fastqout out.fastq
 
@@ -86,7 +86,7 @@ vsearch \
 
 make data flow! A remarkable asset of the Unix/Linux world:
 
-``` bash
+```shell
 # slow
 command1 input.fastq > tmp1.fastq
 command2 tmp1.fastq > tmp2.fastq
@@ -105,7 +105,7 @@ Note: pipes were recently added to R, C++, and other languages.
 
 Use a `tee` to save an intermediary result:
 
-``` bash
+```shell
 command1 input.fastq | \
     command2 | \
     tee output2.fastq | \
@@ -122,7 +122,7 @@ multiple `tee`s and to create a multi-furcation.
 The shell is a great tool to manipulate text. You can easily create
 fake data and pass it to a software you would like to test:
 
-``` bash
+```shell
 # create toy-examples:
 printf ">s_1\nA\n"
 
@@ -239,7 +239,7 @@ to another?
 
 pwd
 mkdir -p tmp
-cd ./tmp/0
+cd ./tmp/
 pwd
 i=5
 export j=5
@@ -265,7 +265,7 @@ Let's create some folders:
 ``` code
 %%shell
 
-mkdir -p src data images references results
+mkdir -p src data references results
 ```
 
 We will need to install
@@ -305,6 +305,16 @@ check:
 
 cutadapt --version
 ```
+
+While we are using the apt system, let's install additional tools:
+
+``` code
+%%shell
+
+apt install dos2unix
+```
+
+(not important, but useful to process the reference database)
 
 
 #### install swarm
@@ -352,7 +362,7 @@ cd ./vsearch/
 ./autogen.sh
 ./configure CFLAGS="-O3" CXXFLAGS="-O3"
 make --jobs
-
+make install
 ```
 
 check:
@@ -384,25 +394,6 @@ versions:
 %%shell
 
 cd ./src/
-
-# occurrence table creation
-URL="https://raw.githubusercontent.com/frederic-mahe/fred-metabarcoding-pipeline/master/src"
-for SCRIPT in "OTU_cleaver" "OTU_contingency_table_filtered" "OTU_table_updater" ; do
-    wget --continue "${URL}/${SCRIPT}.py"
-done
-
-# taxonomic assignment
-URL="https://raw.githubusercontent.com/frederic-mahe/stampa/master"
-wget --continue "${URL}/stampa_merge.py"
-```
-
-
-#### collect figures
-
-``` code
-%%shell
-
-cd ./images/
 
 # occurrence table creation
 URL="https://raw.githubusercontent.com/frederic-mahe/fred-metabarcoding-pipeline/master/src"
@@ -527,7 +518,7 @@ pair of R1 and R2 files for each sample.
 
 ## Part 1: from fastq files to fasta files
 
-![pipeline overview](./images/diapo_pipeline_final_colour.png)
+![pipeline overview](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/diapo_pipeline_final_colour.png)
 
 The pipeline is divided into two parts. A first part where each sample
 is processed individually. And a second part where all samples are
@@ -682,6 +673,16 @@ primer sequences in the initial block of variables, and the raw fastq
 file search pattern and sample file naming (in the final `while`
 loop), if your raw fastq files follow another naming rule.
 
+Let's have a look at the data folder:
+
+```code
+%%shell
+
+cd ./data/
+
+ls
+```
+
 
 ### variable declarations
 
@@ -733,7 +734,7 @@ values of the overlaping positions. An overlap corresponds to a double
 observation, and the error probability must then be re-evaluated for
 each position in the overlap. Some mergers do it the wrong way.
 
-![fastq_merging_theory](./images/fastq_merging_theory.png)
+![fastq_merging_theory](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/fastq_merging_theory.png)
 
 Note: according to [Edgar and Flyvberg
 (2015)](https://doi.org/10.1093/bioinformatics/btv401) merging is an
@@ -794,13 +795,13 @@ the first call removes the *rightmost* forward primer (and everything
 before):
 
 ```
-actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
+                           actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
 ```
 
 the second call removes the reverse primer (and everything after).
 
 ```
-actual_target_sequence
+                           actual_target_sequence
 ```
 
 At either step, if a primer is not found, the read is discarded.
@@ -1008,6 +1009,10 @@ a list of sequences that played the role of cluster seeds in this
 particular sample. Don't worry, that part will be explained in
 details.
 
+Note: the number of layers or steps does not reflect the real pairwise
+distance (pairwise distance is usually smaller):
+
+![step vs pairwise distance](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/steps_vs_pairwise_distance_example.png)
 
 ### loop over each pair of fastq files
 
@@ -1202,7 +1207,21 @@ grep \
 
 ## Part 2: from fasta files to an annotated occurrence table
 
-- remove unused variables
+![pipeline overview](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/diapo_pipeline_final_colour.png)
+
+The pipeline is divided into two parts. A first part where each sample
+is processed individually. And a second part where all samples are
+pooled to produce an occurrence table.
+
+In this second part of the pipeline, we will:
+1. pool fasta samples and dereplicate,
+1. pool metadata (amplicon distributions, local clustering results)
+1. clusterize the whole dataset,
+1. detect chimeras,
+1. *cleave* (separate un-correlated sub-clusters; complement to `lulu`),
+1. assign to taxonomic references,
+1. build a filtered occurrence table
+
 
 ``` code
 %%shell
@@ -1271,6 +1290,7 @@ find "${DATA_FOLDER}" -name "*.fas" \
     -type f ! -empty -execdir cat '{}' + | \
     "${VSEARCH}" \
         --derep_fulllength - \
+        --quiet \
         --sizein \
         --sizeout \
         --log "${LOG}" \
@@ -1303,10 +1323,12 @@ grep "^>" "${OUTPUT_REPRESENTATIVES}" | \
 ## and search for chimeras
 "${VSEARCH}" \
     --fastx_filter "${OUTPUT_REPRESENTATIVES}"  \
+    --quiet \
     --minsize "${FILTER}" \
     --fastaout - | \
     "${VSEARCH}" \
         --uchime_denovo - \
+        --quiet \
         --uchimeout "${UCHIME_RESULTS}" \
         2> "${UCHIME_LOG}"
 
@@ -1341,12 +1363,14 @@ LOWEST_ABUNDANCE=$(sed -rn \
 cat "${OUTPUT_REPRESENTATIVES}" "${OUTPUT_REPRESENTATIVES}2" | \
     "${VSEARCH}" \
         --sortbysize - \
+        --quiet \
         --sizein \
         --minsize ${LOWEST_ABUNDANCE:-1} \
         --sizeout \
         --output - | \
         "${VSEARCH}" \
             --uchime_denovo - \
+            --quiet \
             --uchimeout "${UCHIME_RESULTS}2" \
             2> "${OUTPUT_REPRESENTATIVES%.*}.log2"
 
@@ -1375,11 +1399,14 @@ awk 'NR > 1 {printf ">"$4";size="$2";\n"$10"\n"}' "${OTU_TABLE}" \
 
 
 ## ------------------------------------------------------- taxonomic assignment
+echo
+echo "taxonomic assignment..."
 
 # search for best hits
 ${VSEARCH} \
     --usearch_global "${OTU_TABLE/.table/.fas}" \
     --db ${DATABASE} \
+    --quiet \
     --threads ${THREADS} \
     --dbmask none \
     --qmask none \
