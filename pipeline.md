@@ -1245,7 +1245,7 @@ declare -r STAMPA_MERGE="stampa_merge.py"
 declare -r DATABASE="../references/pr2_version_5.0.0_SSU_CCAGCASCYGCGGTAATTCC_ACTTTCGTTCTTGATYRA_subset.fas"
 
 N_SAMPLES=$(find "${DATA_FOLDER}" -name "*.fas" \
-                -type f ! -empty -print0 | tr -d -c '\0' | wc -m)
+                -type f ! -empty -print0 | tr -d -c '\0' | wc --chars)
 FINAL_FASTA="${PROJECT}_${N_SAMPLES}_samples.fas"
 QUALITY_FILE="${FINAL_FASTA%.*}.qual"
 DISTRIBUTION_FILE="${FINAL_FASTA%.*}.distr"
@@ -1281,7 +1281,7 @@ find "${DATA_FOLDER}" -name "*.fas" \
 
 ## list all cluster seeds of size > 2
 find "${DATA_FOLDER}" -name "*.stats" \
-    -type f ! -empty -execdir grep -H "" '{}' \; | \
+    -type f ! -empty -execdir grep --with-filename "" '{}' \; | \
     sed 's/^\.\/// ; s/\.stats:/\t/' > "${POTENTIAL_SUB_SEEDS}" &
 
 
@@ -1313,9 +1313,9 @@ find "${DATA_FOLDER}" -name "*.fas" \
 
 ## fake taxonomic assignment
 grep "^>" "${OUTPUT_REPRESENTATIVES}" | \
-    sed -r 's/^>//
-            s/;size=/\t/
-            s/;?$/\t0.0\tNA\tNA/' > "${TAXONOMIC_ASSIGNMENTS}"
+    sed --regexp-extended 's/^>//
+                           s/;size=/\t/
+                           s/;?$/\t0.0\tNA\tNA/' > "${TAXONOMIC_ASSIGNMENTS}"
 
 
 ## chimera detection
@@ -1334,6 +1334,7 @@ grep "^>" "${OUTPUT_REPRESENTATIVES}" | \
 
 
 ## ------------------------------------------------------------------- cleaving
+echo
 echo "run cleaving..."
 
 ## split OTUs
@@ -1347,15 +1348,15 @@ python3 \
 
 ## fake taxonomic assignment
 grep "^>" "${OUTPUT_REPRESENTATIVES}2" | \
-    sed -r 's/^>//
-            s/;size=/\t/
-            s/;?$/\t0.0\tNA\tNA/' > "${TAXONOMIC_ASSIGNMENTS}2"
+    sed --regexp-extended 's/^>//
+                           s/;size=/\t/
+                           s/;?$/\t0.0\tNA\tNA/' > "${TAXONOMIC_ASSIGNMENTS}2"
 
 ## chimera detection (only down to the smallest newly cleaved OTU)
-LOWEST_ABUNDANCE=$(sed -rn \
+LOWEST_ABUNDANCE=$(sed --regexp-extended --quiet \
     '/^>/ s/.*;size=([0-9]+);?/\1/p' \
     "${OUTPUT_REPRESENTATIVES}2" | \
-    sort -n | \
+    sort --numeric-sort | \
     head -n 1)
 
 # sort and filter by abundance (default to an abundance of 1), search
@@ -1378,6 +1379,7 @@ unset LOWEST_ABUNDANCE
 
 
 ## ------------------------------------------------------------ first OTU table
+echo
 echo "build first OTU table..."
 
 # build OTU table
@@ -1426,15 +1428,14 @@ ${VSEARCH} \
 python3 ${SRC}/${STAMPA_MERGE} $(pwd)
 
 # sort by decreasing abundance
-sort -k2,2nr -k1,1d results.representatives > representatives.results
-
-cp representatives.results "${OTU_TABLE/.table/.results}"
+sort -k2,2nr -k1,1d results.representatives > "${OTU_TABLE/.table/.results}"
 
 # clean-up
-# rm results.representatives representatives.results
+rm hits.representatives results.representatives
 
 
 ## ----------------------------------------------------------- update OTU table
+echo
 echo "build final OTU table..."
 NEW_TABLE=$(mktemp)
 
@@ -1446,7 +1447,10 @@ python3 \
 
 # fix OTU sorting
 (head -n 1 "${NEW_TABLE}"
-    tail -n +2 "${NEW_TABLE}" | sort -k2,2nr | nl -n'ln' -w1 | cut --complement -f 2
+    tail -n +2 "${NEW_TABLE}" | \
+    sort -k2,2nr | \
+    nl --number-format='ln' --number-width=1 | \
+    cut --complement -f 2
 ) > "${OTU_TABLE}2"
 
 # clean up
@@ -1455,6 +1459,7 @@ rm "${NEW_TABLE}"
 
 - explain cleaving (as a complement to lulu: separate similar
   sequences that do not co-occur)
+
 
 ### pool expected error values
 
@@ -1489,6 +1494,7 @@ dca48a272d66c555b06317af2472455db8140237 0.002780 35
 ...
 ```
 
+
 ### pool fasta entries
 
 Note: we need to dereplicate first. This time we use --sizein to take
@@ -1506,6 +1512,7 @@ Note: swarm's log contains a lot of information. The most important
 ones are the number of clusters, the number of unique sequences in the
 largest cluster, and the memory consumption. The term OTU is now used
 to designate 97%-based clusters. In that sense swarm produces ASVs.
+
 
 ### distribution
 
@@ -1602,16 +1609,16 @@ Content of the OTU table:
 
 ## Conclusion
 
-Metabarcoding's main challenge is noise. Bioinformatics can solve part
-of the problem, but robust experimental designs with replicates and
-controls can do wonders.
+Metabarcoding's main challenge is noise. Bioinformatics tools can
+solve part of the problem, but robust experimental designs with
+replicates and controls are your safest bet.
 
 
 ### seed vs cloud
 
-![seed vs cloud](./images/seed_vs_cloud.png) <!-- .element height="50%" width="50%" -->
+![seed vs cloud](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/seed_vs_cloud.png) <!-- .element height="50%" width="50%" -->
 
 
 ### post-super OTU breaking
 
-![before and after](./images/grasp_nodD_764_samples_1f.stats.before_after_OTU_breaking.png)
+![before and after](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/grasp_nodD_764_samples_1f.stats.before_after_OTU_breaking.png)
