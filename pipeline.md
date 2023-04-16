@@ -1495,28 +1495,20 @@ dca48a272d66c555b06317af2472455db8140237 0.002780 35
 ```
 
 
-### pool fasta entries
-
-Note: we need to dereplicate first. This time we use --sizein to take
-into account the results of sample-level dereplications.
-
-
-### clustering
-
-Note: swarm outputs clusters and cluster representatives in fasta
-format. swarm can also output interesting stats and a description of
-the internal structure of the clusters. We are going to use all these
-files.
-
-Note: swarm's log contains a lot of information. The most important
-ones are the number of clusters, the number of unique sequences in the
-largest cluster, and the memory consumption. The term OTU is now used
-to designate 97%-based clusters. In that sense swarm produces ASVs.
-
-
 ### distribution
 
-Already covered?
+For each unique amplicon in the dataset, record the samples where it
+occurs, and its abundance in that sample:
+
+```shell
+## Build distribution file (sequence <-> sample relations)
+find "${DATA_FOLDER}" -name "*.fas" \
+    -type f ! -empty -execdir grep -H "^>" '{}' \; | \
+    sed 's/.*\/// ; s/\.fas:>/\t/ ; s/;size=/\t/ ; s/;$//' | \
+    awk 'BEGIN {FS = OFS = "\t"} {print $2, $1, $3}' > "${DISTRIBUTION_FILE}" &
+```
+
+The results is a three-column table:
 
 ``` text
 f414cfec8c1cc3973e95e67cff46299a00e8368a	S001	7369
@@ -1531,16 +1523,101 @@ be8e83ba27fa599c1eccb416e06131870ba101e6	S001	119
 2ba9bb0fe66318a974db3a580b23b3b1691f4a54	S001	87
 ```
 
-Note: every sequence in the dataset, the samples where it occurs, and
-its abundance in that sample.
+
+### local cluster representatives
+
+Discard clusters with only two or less reads. This information will be
+used during the cleaving step:
+
+```shell
+## list all cluster seeds of size > 2
+find "${DATA_FOLDER}" -name "*.stats" \
+    -type f ! -empty -execdir grep --with-filename "" '{}' \; | \
+    sed 's/^\.\/// ; s/\.stats:/\t/' > "${POTENTIAL_SUB_SEEDS}" &
+```
+
+
+### pool fasta entries
+
+```shell
+## global dereplication
+find "${DATA_FOLDER}" -name "*.fas" \
+    -type f ! -empty -execdir cat '{}' + | \
+    "${VSEARCH}" \
+        --derep_fulllength - \
+        --quiet \
+        --sizein \
+        --sizeout \
+        --log "${LOG}" \
+        --fasta_width 0 \
+        --output "${FINAL_FASTA}"
+```
+
+Note: we need to dereplicate before clustering. This time we use the
+option `--sizein` to take into account the abundance obtained during
+sample-level dereplications.
+
+
+### clustering
+
+global clustering. I recommend to use d = 1 with the fastidious
+option:
+
+```shell
+## clustering (swarm 3 or more recent)
+"${SWARM}" \
+    --differences "${RESOLUTION}" \
+    --fastidious \
+    --usearch-abundance \
+    --threads "${THREADS}" \
+    --internal-structure "${OUTPUT_STRUCT}" \
+    --output-file "${OUTPUT_SWARMS}" \
+    --statistics-file "${OUTPUT_STATS}" \
+    --seeds "${OUTPUT_REPRESENTATIVES}" \
+    "${FINAL_FASTA}" 2> "${OUTPUT_LOG}"
+```
+
+`swarm` outputs clusters and cluster representatives in fasta
+format. `swarm` can also output interesting stats and a description of
+the internal structure of the clusters. We are going to use all these
+files.
+
+`swarm`'s log contains a lot of information. The most important ones
+are the number of clusters, the number of unique sequences in the
+largest cluster, and the memory consumption. In its current
+acceptation, the term OTU designates 97%-based clusters. In that
+sense, `swarm` produces ASVs.
 
 
 ### Chimera detection
 
+Chimeras are very frequent in metabarcoding dataset. Their frequence
+increases with the number of PCR cycles, and it is important to detect
+and remove them. The dominant algorithm today is `uchime` (citation),
+and we are using its `vsearch` implementation.
 
-Note: vsearch reimplements uchime, the most widely used chimera
-detection tool.
+To reduce the computational load, we are working with cluster
+representatives, rather than working with the whole fasta
+dataset. Similarly, we are also not checking the chimeric status of
+clusters with only one read (*singletons*):
 
+```shell
+## chimera detection
+## discard sequences with an abundance lower than FILTER
+## and search for chimeras
+"${VSEARCH}" \
+    --fastx_filter "${OUTPUT_REPRESENTATIVES}"  \
+    --quiet \
+    --minsize "${FILTER}" \
+    --fastaout - | \
+    "${VSEARCH}" \
+        --uchime_denovo - \
+        --quiet \
+        --uchimeout "${UCHIME_RESULTS}" \
+        2> "${UCHIME_LOG}"
+```
+
+Here is `vsearch`'s report:
 
 ```
 vsearch v2.22.1_linux_x86_64, 62.7GB RAM, 8 cores
@@ -1569,9 +1646,9 @@ vsearch!
 
 ### build filtered occurrence table
 
-Note: eliminate sequences that are not chimeras, in the remaining
-cluster representatives, eliminate those with an abundance of 1. I do
-not recommend to eliminate chimeras before taxonomic assignment. If a
+Note: eliminate sequences that are chimeras. In the remaining cluster
+representatives, eliminate those with an abundance of 1. I do not
+recommend to eliminate chimeras before taxonomic assignment. If a
 chimera is 100% identical to a reference sequence, then it is a false
 positive (not a chimera) or a sign that the matching reference should
 be investigated.
@@ -1579,8 +1656,57 @@ be investigated.
 
 ### Taxonomy: last-common ancestor
 
-if an env sequence is equidistant to several ref sequences, find the
-last-common ancestor (part of the taxonomic path that is common)
+Brute-force approach! This is the slowest step in the pipeline, by
+far. It can easily be distributed on a large cluster of computers and
+be done under 20 minutes, even for a large dataset. This is the method
+I use in my own projects, but I admit it is not the most efficient,
+and other methods should be explored (sintax, AI):
+
+```shell
+# search for best hits
+${VSEARCH} \
+    --usearch_global "${OTU_TABLE/.table/.fas}" \
+    --db ${DATABASE} \
+    --quiet \
+    --threads ${THREADS} \
+    --dbmask none \
+    --qmask none \
+    --rowlen 0 \
+    --notrunclabels \
+    --userfields query+id1+target \
+    --maxaccepts 0 \
+    --maxrejects 0 \
+    --top_hits_only \
+    --output_no_hits \
+    --id 0.5 \
+    --iddef 1 \
+    --userout - | \
+    sed 's/;size=/_/ ; s/;//' > hits.representatives
+
+# in case of multi-best hit, find the last-common ancestor
+python3 ${SRC}/${STAMPA_MERGE} $(pwd)
+```
+
+The advantage of this method is the clarity of the results. Since both
+query and reference cover the same genomic region (in-between our
+forward and reverse primers), then we can use a simple similarity
+formula. The similarity percentage is easy to interpret (overlap is
+always 100%).
+
+
+show an example of hits 
+
+The explain the LCA approach.
+
+
+
+if an environmental sequence is equidistant to several reference
+sequences, find the last-common ancestor (part of the taxonomic path
+that is common)
+
+This method is great for finding errors in reference database (show an
+example in the results file : `*` stars everywhere = deep conflict
+
 
 ```
 1462274 nt in 4001 seqs, min 87, max 466, avg 365
@@ -1604,7 +1730,6 @@ Content of the OTU table:
 1. identity (maximum similarity of the OTU representative with reference sequences)
 1. taxonomy (taxonomic assignment of the OTU representative)
 1. references (reference sequences closest to the OTU representative)
-
 
 
 ## Conclusion
