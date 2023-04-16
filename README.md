@@ -15,5 +15,5 @@ format, export to a [jupyter](https://jupyter.org/) notebook with
 [pandoc](https://pandoc.org)!
 
 ``` bash
-pandoc -o 00_requirements.ipynb 00_requirements.org
+pandoc -o pipeline.ipynb pipeline.md
 ```
