@@ -2,7 +2,7 @@
 
 Frédéric Mahé, April 19th 2023
 
-A fast and accurate pipeline.
+A fast and accurate metabarcoding pipeline.
 
 Contrary to traditional pipelines, most filtering steps are done after
 the clustering/denoising step, when the risk of eliminating real
@@ -397,6 +397,25 @@ wget --continue "${URL}/stampa_merge.py"
 ```
 
 
+#### collect figures
+
+``` code
+%%shell
+
+cd ./images/
+
+# occurrence table creation
+URL="https://raw.githubusercontent.com/frederic-mahe/fred-metabarcoding-pipeline/master/src"
+for SCRIPT in "OTU_cleaver" "OTU_contingency_table_filtered" "OTU_table_updater" ; do
+    wget --continue "${URL}/${SCRIPT}.py"
+done
+
+# taxonomic assignment
+URL="https://raw.githubusercontent.com/frederic-mahe/stampa/master"
+wget --continue "${URL}/stampa_merge.py"
+```
+
+
 ### sequencing data
 
 Today, we are going to use a subset of the Neotropical Forest Soil
@@ -507,6 +526,8 @@ pair of R1 and R2 files for each sample.
 
 
 ## Part 1: from fastq files to fasta files
+
+![pipeline overview](./images/diapo_pipeline_final_colour.png)
 
 The pipeline is divided into two parts. A first part where each sample
 is processed individually. And a second part where all samples are
