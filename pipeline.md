@@ -1592,18 +1592,18 @@ Matching unique query sequences: 1272 of 1358 (93.67%)
 
 Content of the OTU table:
 1. OTU number
-2. total number of reads
-3. cloud (total number of unique sequences)
-4. amplicon (identifier of the OTU representative)
-5. length (length of the OTU representative)
-6. abundance (abundance of the OTU representative)
-7. chimera (is it a chimera? Yes, No, ?)
-8. spread (number of samples where the OTU occurs)
-9. quality (minimum expected error observed for the OTU representative, divided by sequence length)
-10. sequence (sequence of the OTU representative)
-11. identity (maximum similarity of the OTU representative with reference sequences)
-12. taxonomy (taxonomic assignment of the OTU representative)
-13. references (reference sequences closest to the OTU representative)
+1. total number of reads
+1. cloud (total number of unique sequences)
+1. amplicon (identifier of the OTU representative)
+1. length (length of the OTU representative)
+1. abundance (abundance of the OTU representative)
+1. chimera (is it a chimera? Yes, No, ?)
+1. spread (number of samples where the OTU occurs)
+1. quality (minimum expected error observed for the OTU representative, divided by sequence length)
+1. sequence (sequence of the OTU representative)
+1. identity (maximum similarity of the OTU representative with reference sequences)
+1. taxonomy (taxonomic assignment of the OTU representative)
+1. references (reference sequences closest to the OTU representative)
 
 
 
