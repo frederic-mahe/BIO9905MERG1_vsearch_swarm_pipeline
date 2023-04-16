@@ -1572,12 +1572,6 @@ Content of the OTU table:
 13. references (reference sequences closest to the OTU representative)
 
 
-Taxonomic barchart
-
-![phylum level](./images/Boreal_forest_soils_18SV4_48_samples_phylum_level.png)
-
-
-
 
 ## Conclusion
 
