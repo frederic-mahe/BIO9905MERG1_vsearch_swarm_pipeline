@@ -2,31 +2,20 @@
 
 Frédéric Mahé, April 19th 2023
 
-open questions:
-
-- wget fastq files from GitHub,
-- all code blocks are launched from $HOME and not from the latest
-  folder?
-- update: `extract_expected_error_values()` can be simplified with
-  vsearch 2.23
-
-- some blocks can be executed. Blocks that can't be executed are here
-  to show how certain files were produced. They are not necessary for
-  the pipeline.
-
-
-## aim
-
 A fast and accurate pipeline.
 
-Contrary to traditional pipelines, most filtering steps are done
-post-clustering, where the risk of eliminating real molecular
-diversity is minimized.
+Contrary to traditional pipelines, most filtering steps are done after
+the clustering/denoising step, when the risk of eliminating real
+molecular diversity is minimized.
 
-Please feel free to ask questions at anytime.
+Please feel free to ask questions at anytime during this hands-on
+session.
 
 
 ## Part 0: crash-course and set-up
+
+A quick introduction on the type of code you will see today.
+
 ### shell
 #### code block
 
@@ -48,8 +37,14 @@ vsearch \
     --fastqout out.fastq
 ```
 
+Some blocks can be executed in Google colab. Blocks that can't be
+executed are examples, like the one above. They are not necessary for
+the pipeline.
+
 
 #### redirect
+
+You can redirect the output of a shell command:
 
 ```shell
 # basics
@@ -62,11 +57,14 @@ command < input.fastq
 >>  2>>  2>&1  <(...)
 ```
 
-Note: I've been writing shell scripts for 15 years, and I may use
-lesser known aspects of bash. Feel free to ask if my code is unclear.
+Note: I've been writing shell scripts daily for nearly 20 years, and I
+may use lesser known aspects of bash (and not know about recent
+features). Feel free to ask or comment if my code is unclear.
 
 
 #### wrap
+
+A matter of personal preference:
 
 ``` bash
 # too long to read:
@@ -86,7 +84,7 @@ vsearch \
 
 #### pipe
 
-make data flow
+make data flow! A remarkable asset of the Unix/Linux world:
 
 ``` bash
 # slow
@@ -100,19 +98,29 @@ command1 input.fastq | \
     command3 > final_output.fastq
 ```
 
+Note: pipes were recently added to R, C++, and other languages.
+
 
 #### tee
 
+Use a `tee` to save an intermediary result:
+
 ``` bash
-# use a tee to save an intermediary result:
 command1 input.fastq | \
     command2 | \
     tee output2.fastq | \
     command3 > final_output.fastq
 ```
 
+A `tee` will duplicate your stream of data, allowing you to do process
+it in two different ways simulatenously. It is possible to connect
+multiple `tee`s and to create a multi-furcation.
+
 
 #### test
+
+The shell is a great tool to manipulate text. You can easily create
+fake data and pass it to a software you would like to test:
 
 ``` bash
 # create toy-examples:
@@ -124,16 +132,19 @@ printf ">s_1\nA\n" | \
 ```
 
 Note: documentation rarely is 100% complete, when you have a doubt
-about a tool, create a toy-example to test its behavior
+about a tool, create a toy-example to test its behavior. We'll dive
+deeper into code testing this afternoon during the `lulu` session.
 
 
 ### FASTQ format
 
-- [FASTQ](https://en.wikipedia.org/wiki/FASTQ_format#Encoding)
-- most frequent format
-- human-readable
-- can be hard to parse
-- encode quality values (probability of error for each position)
+Metabarcoding data are usually available in
+[FASTQ](https://en.wikipedia.org/wiki/FASTQ_format#Encoding) format:
+
+- most-frequent format,
+- human-readable,
+- encode quality values (probability of error for each position),
+- can be hard to parse,
 - encoding type must be guessed
 
 
@@ -143,20 +154,22 @@ CATAATTTCCTCCGCTTATTGATATGCTTAAGTTCAGCGGGTATCCCTACCTGATCCGAGTTCAACCTAAGAAAGTTGGG
 +
 @-A-9EFGFFFFD7BFF7FE9,C9F<EFG99,CEF9,@77+@+CCC@F9FCF9,C@C,,+,8C9<CEF,,,,,,,CF,,+++8FEF9,?+++@+++B++@C+,,B?FE8E,,<+++++3C,CF9DF9>>CFE7,,3=@7,,@++@:FC7BC*CC:,7>DF9,,,,7?*=B*5?*:++7***=?EE3***2;***:*0*/;@C8*<C+*<<+
 ```
-note that the quality line starts with a @ ...
+
+Note: the quality line may starts with a @ ...
 
 Note: Q values are a way to encode on one character numerical values
-ranging from 0 to 40 (usually). These values represent the probability
+ranging from 0 to 41 (usually). These values represent the probability
 of a wrong base calling for that particular position. Q20 means 1% of
-risk, Q30 means 0.1% and Q40 means 0.01%.
+risk, Q30 means 0.1%, and Q40 means 0.01%.
 
 In paired-end sequencing, there are two files per sample: R1 and
-R2. Each R1 read has a R2 counterpart.
+R2. Each R1 read has a R2 counterpart, and reads are in the same order
+in both files.
 
 
-## Google Colab
+### Google Colab
 
-Let's explore the environment:
+Let's explore this environment. This is our first executable block:
 
 ``` code
 %%shell
@@ -167,7 +180,7 @@ whoami
 
 We are `root`! Maximal clearance level, we can do anything we want.
 
-Check OS version:
+Check the OS version:
 
 ``` code
 %%shell
@@ -193,7 +206,7 @@ python --version
 R --version
 ```
 
-R, Git and the compilation toolchain are already installed.
+`R`, `git` and the compilation toolchain are already installed.
 
 The `gcc` version is a bit old (9.2), and might not allow to compile
 code based on very recent standards (e.g.; `mumu` wich uses C++20
@@ -218,7 +231,8 @@ I will assume that you also have [python](https://www.python.org/)
 or more), and [bash](https://www.gnu.org/software/bash/) (version 4 or
 more).
 
-Is it possible to pass data from one `shell` code block to another?
+Last check : is it possible to pass data from one `shell` code block
+to another?
 
 ``` code
 %%shell
@@ -240,17 +254,18 @@ echo "j="$j
 
 It seems that in `%%shell` code blocks, `cd` moves, variable
 declarations, and function declarations are limited to the current
-block (no effect on downstream code blocks).
+block (no effect on downstream code blocks). Only file and folder
+creations are persistent.
 
 
-## install dependencies
+### install dependencies
 
 Let's create some folders:
 
 ``` code
 %%shell
 
-mkdir -p src data references results
+mkdir -p src data images references results
 ```
 
 We will need to install
@@ -263,7 +278,7 @@ Installing [lulu](https://github.com/tobiasgf/lulu) or
 particular pipeline.
 
 
-### install cutadapt
+#### install cutadapt
 
 We could install the Ubuntu version:
 
@@ -292,11 +307,12 @@ cutadapt --version
 ```
 
 
-### install swarm
+#### install swarm
 
 We could install `swarm` and `vsearch` using `conda`, but for
 educational purposes, let's compile them ourselves. We will put their
-source code in the `/tmp` folder (cleaned during each reboot):
+source code in the `/tmp` folder (this folder is cleaned automatically
+between reboots):
 
 ``` code
 %%shell
@@ -325,7 +341,7 @@ rm --recursive /tmp/swarm/
 ```
 
 
-### install vsearch
+#### install vsearch
 
 ``` code
 %%shell
@@ -355,11 +371,11 @@ clean-up:
 rm --recursive /tmp/vsearch/
 ```
 
-### install python scripts
+#### install python scripts
 
-In the second part of the pipeline, we are going to use python scripts
-to build and update occurrence tables, and to compute last-common
-ancestor taxonomic assignments.
+In the second part of the pipeline, we are going to use four python
+scripts to build and update occurrence tables, and to compute
+last-common ancestor taxonomic assignments.
 
 The scripts are available on GitHub, let's download the latest
 versions:
@@ -369,21 +385,22 @@ versions:
 
 cd ./src/
 
-## occurrence table creation
+# occurrence table creation
 URL="https://raw.githubusercontent.com/frederic-mahe/fred-metabarcoding-pipeline/master/src"
 for SCRIPT in "OTU_cleaver" "OTU_contingency_table_filtered" "OTU_table_updater" ; do
     wget --continue "${URL}/${SCRIPT}.py"
 done
 
-## taxonomic assignment
+# taxonomic assignment
 URL="https://raw.githubusercontent.com/frederic-mahe/stampa/master"
 wget --continue "${URL}/stampa_merge.py"
 ```
 
 
-## sequencing data
+### sequencing data
 
-A subset of the Neotropical Forest Soil dataset
+Today, we are going to use a subset of the Neotropical Forest Soil
+dataset
 ([PRJNA317860](https://www.ebi.ac.uk/ena/browser/view/PRJNA317860);
 [Mahé et al., 2017](https://doi.org/10.1038/s41559-017-0091)),
 corresponding to the following ENA/SRA run accessions:
@@ -434,12 +451,17 @@ function subsample() {
 export -f subsample
 
 find . -name "NG-7070_*.fastq.gz" -type f -exec bash -c 'subsample "$0"' {} \;
-
 ```
 
-This is a very powerful and robust way to find and subsample all fastq
-files (it will find every file, including files in sub-folders). You
-might be more familiar with a loop-based approach:
+Subsampling is useful when you are developping and testing a new
+pipeline. The dataset is smaller but remains realistic, allowing for a
+faster developement cycle. With `vsearch`, you can also subsample down
+to a particular number of reads.
+
+Combining `vsearch` with the command `find` offers a very powerful and
+robust way to find and subsample all fastq files (it will find every
+file, including files in sub-folders). You might find a loop-based
+approach easier to read:
 
 ```shell
 for FASTQ in "NG-7070_*.fastq.gz" ; do
@@ -448,7 +470,7 @@ done
 ```
 
 Note: in a pair of R1 and R2 fastq files, both files have the same
-number of reads, so using a fix seed (not zero) guarantees that
+number of reads, so using a fix seed (i.e., not zero) guarantees that
 subsamplings results for both R1 and R2 fastq files are identical
 (same number of reads, same reads, in the same order)
 
@@ -487,8 +509,8 @@ pair of R1 and R2 files for each sample.
 ## Part 1: from fastq files to fasta files
 
 The pipeline is divided into two parts. A first part where each sample
-is processed individually. And a second part where samples are pooled
-to produce an occurrence table.
+is processed individually. And a second part where all samples are
+pooled to produce an occurrence table.
 
 In this first part of the pipeline, we will:
 1. merge R1 and R2,
@@ -636,8 +658,9 @@ find . -name "${FASTQ_NAME_PATTERN}" -type f -print0 | \
 
 To adapt this code to another dataset, you just need to change the
 primer sequences in the initial block of variables, and the raw fastq
-file search pattern and sample file naming if your raw fastq files
-follow another naming rule (in the final `while` loop).
+file search pattern and sample file naming (in the final `while`
+loop), if your raw fastq files follow another naming rule.
+
 
 ### variable declarations
 
@@ -685,13 +708,17 @@ ADAPTOR-TAG-PRIMER_FORWARD-actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
 
 A minimal overlap and similarity is required for the merging. Reads
 that can't be merged are discarded. `vsearch` re-computes the quality
-values of the overlaping positions (double observations, the error
-probability must be re-evaluated. Some mergers do it the wrong way).
+values of the overlaping positions. An overlap corresponds to a double
+observation, and the error probability must then be re-evaluated for
+each position in the overlap. Some mergers do it the wrong way.
 
-Note: according to Edgar and Flyvberg (2015) merging is an important
-step that can change radically the apparent diversity profile of a
-community (some popular mergers do not cope well with variable length
-markers).
+![fastq_merging_theory](./images/fastq_merging_theory.png)
+
+Note: according to [Edgar and Flyvberg
+(2015)](https://doi.org/10.1093/bioinformatics/btv401) merging is an
+important step that can change radically the apparent diversity
+profile of a community (some popular mergers do not cope well with
+variable length markers).
 
 
 ### reverse-complement
@@ -709,10 +736,8 @@ revcomp() {
 That function takes a primer sequence, for example
 `ACTTTCGTTCTTGATYRA` and outputs the reverse-complement of that
 sequence (`TYRATCAAGAACGAAAGT`). This is useful when searching for
-primers after merging.
-
-
-After merging, the reverse primer is reverse-complemented.
+primers after merging, because the reverse primer is
+reverse-complemented in merged reads:
 
 ```
 ADAPTOR-TAG-PRIMER_FORWARD-actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
@@ -782,7 +807,7 @@ No Match
 PRIMER_FORWARD
 ```
 
-Note: `--max-n 0` reads with uncertain nucleotides (`N`) are
+Note: with `--max-n 0`, reads with uncertain nucleotides (`N`) are
 discarded.
 
 
@@ -814,7 +839,7 @@ AAAA
 IIII
 ```
 
-will be transformed into a fasta entry, with a sequence-derived name
+will be transformed into a `fasta` entry, with a sequence-derived name
 (hash value of the sequence), and the computed expected error (later
 used for quality filtering):
 
@@ -869,8 +894,9 @@ c7c55f0c514ce8c2a5ee49f02523dadcd96a4109 0.01171 78
 ...
 ```
 
-Note: that function could be simplified now that `vsearch` 2.23 can
-add length attributes `;length=123` to fastq and fasta headers.
+Note: that function could be simplified now that `vsearch` version
+2.23 can add length attributes `;length=123` to fastq and fasta
+headers.
 
 
 ### dereplicate
@@ -918,10 +944,9 @@ that this particular sequence has been observed twice.
 ### list local clusters
 
 Later in this analysis, we will need to search for cluster
-co-occurences on a per-sample basis. We quickly generate clusters and
-a list of cluster seeds with `swarm` and store the results (reminder:
-everything is done at the sample level in that first part of the
-pipeline). Here we use `swarm` for the first time, I will give more
+co-occurences on a per-sample basis. For each sample, we quickly
+generate clusters and a list of cluster seeds with `swarm` and store
+the results. Here we use `swarm` for the first time, I will give more
 details when `swarm` will be used to process the whole dataset (pooled
 samples), in the second part of the pipeline.
 
@@ -966,7 +991,8 @@ details.
 ### loop over each pair of fastq files
 
 Finally, we search for all fastq R1 files (`find`) and we apply our
-functions. If we remove the clutter, it looks like this:
+functions (merge, trim, convert, extract, dereplicate, clusterize). If
+we remove the visual clutter, it looks like this:
 
 ```shell
 find . -name "${FASTQ_NAME_PATTERN}" -type f -print0 | \
@@ -984,8 +1010,16 @@ find . -name "${FASTQ_NAME_PATTERN}" -type f -print0 | \
 
 That's it for the first part of the pipeline!
 
+The whole process is very fast, even for large datasets. It is also
+easy to distribute the computation load on many machines, if need
+be.
+
 
 ### trimming and merging success rate?
+
+Read merging and primer trimming are lossy filters (reads are
+lost). It is a good practice to control the per-sample and overall
+yield:
 
 ```code
 %%shell
@@ -1026,14 +1060,19 @@ L080    |  3577 |      2207 | 1996 | 1917
 L090    |  7210 |      4291 | 3991 | 3914
 L100    |  8502 |      5470 | 4947 | 4872
 
+A yield above 80% is good. Below 60%, something might be wrong with
+your run or your biological material (bad chemistry, target sequence
+too long, non-specific amplification, wrong primer sequences, etc.).
+
 
 ## Part 1¾: taxonomic references
 
 Before tackling the second part of the pipeline, we need to prepare
-our reference database for the taxonomic assignment of our
-environmental sequences.
+our reference database that is going to be used for the taxonomic
+assignment of our environmental sequences.
 
-We are working with 18S V4 amplicons. We could use Silva SSU, but
+We are working with 18S V4 amplicons. We could use
+[Silva](http://www.arb-silva.de/) SSU, but
 [PR2](https://github.com/pr2database/pr2database), the Protist
 Ribosomal Reference database, is a well-curated and eukaryote specific
 database of SSU (18S) references. Let's use the latest version (5.0),
@@ -1111,11 +1150,14 @@ Note: while preparing this, I've found a small bug in the latest PR2
 release ([weird character in one species
 name](https://github.com/pr2database/pr2database/issues/37))
 
+
 ### subsample PR2
 
-With a complete PR2 reference dataset taxonomic assignment would take
-an hour on a Google colab instance. To speed up things, I provide a
-PR2 subset with exactly what we need for that dataset.
+With a complete PR2 reference dataset, taxonomic assignment would take
+more than an hour on a Google colab instance (that's the most
+computationaly intensive step in whole the pipeline). To speed up
+things, I provide a PR2 subset with exactly what we need for the
+Neotropical dataset.
 
 ``` code
 %%shell
@@ -1139,8 +1181,6 @@ grep \
 
 ## Part 2: from fasta files to an annotated occurrence table
 
-- install python scripts first,
-- fix taxonomic assignment,
 - remove unused variables
 
 ``` code
@@ -1164,10 +1204,6 @@ declare -r OTU_TABLE_UPDATER="OTU_table_updater.py"
 declare -r STAMPA_MERGE="stampa_merge.py"
 declare -r DATABASE="../references/pr2_version_5.0.0_SSU_CCAGCASCYGCGGTAATTCC_ACTTTCGTTCTTGATYRA_subset.fas"
 
-## ---------------------------------------------------------- global clustering
-echo "run global clustering and chimera detection..."
-
-## variables and file names
 N_SAMPLES=$(find "${DATA_FOLDER}" -name "*.fas" \
                 -type f ! -empty -print0 | tr -d -c '\0' | wc -m)
 FINAL_FASTA="${PROJECT}_${N_SAMPLES}_samples.fas"
@@ -1184,7 +1220,10 @@ TAXONOMIC_ASSIGNMENTS="${OUTPUT_REPRESENTATIVES%.*}.results"
 UCHIME_RESULTS="${OUTPUT_REPRESENTATIVES%.*}.uchime"
 UCHIME_LOG="${OUTPUT_REPRESENTATIVES%.*}.log"
 OTU_TABLE="${FINAL_FASTA%.*}.OTU.filtered.cleaved.table"
-OUTPUT_TABLE="${OTU_TABLE%.*}.nosubstringOTUs.table"
+
+
+## ---------------------------------------------------------- global clustering
+echo "run global clustering and chimera detection..."
 
 ## Build expected error file
 find "${DATA_FOLDER}" -name "*.qual" \
@@ -1336,7 +1375,7 @@ ${VSEARCH} \
     sed 's/;size=/_/ ; s/;//' > hits.representatives
 
 # in case of multi-best hit, find the last-common ancestor
-python ${SRC}/${STAMPA_MERGE} $(pwd)
+python3 ${SRC}/${STAMPA_MERGE} $(pwd)
 
 # sort by decreasing abundance
 sort -k2,2nr -k1,1d results.representatives > representatives.results
@@ -1363,16 +1402,11 @@ python3 \
 ) > "${OTU_TABLE}2"
 
 # clean up
-chmod go+r,g-w "${OTU_TABLE}2"
 rm "${NEW_TABLE}"
 ```
 
-- explain cleaving (as a complement to lulu: separate similar sequences that do not co-occur)
-- with a complete PR2 reference dataset taxonomic assignment would
-  take an hour on Google colab, to speed up things, I provide a PR2
-  subset with exactly what we need for that dataset,
-
-
+- explain cleaving (as a complement to lulu: separate similar
+  sequences that do not co-occur)
 
 ### pool expected error values
 
