@@ -1004,6 +1004,9 @@ uniq| abundance | seed | abundance| singletons|layers|steps
 759|5355|91be8585fcad245e9f3a53578207c58355426583|3603|540|4|4
 743|5981|42871cf2b4deaa78cbd1c163847567685c56d44e|3654|567|4|4
 
+Note: clusters with only two or less reads are discarded (not useful
+for *cleaving*).
+
 In the second part of the pipeline, we are going to use that table as
 a list of sequences that played the role of cluster seeds in this
 particular sample. Don't worry, that part will be explained in
@@ -1013,6 +1016,7 @@ Note: the number of layers or steps does not reflect the real pairwise
 distance (pairwise distance is usually smaller):
 
 ![step vs pairwise distance](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/steps_vs_pairwise_distance_example.png)
+
 
 ### loop over each pair of fastq files
 
@@ -1214,8 +1218,8 @@ is processed individually. And a second part where all samples are
 pooled to produce an occurrence table.
 
 In this second part of the pipeline, we will:
+1. pool metadata (amplicon distributions, local clustering results),
 1. pool fasta samples and dereplicate,
-1. pool metadata (amplicon distributions, local clustering results)
 1. clusterize the whole dataset,
 1. detect chimeras,
 1. *cleave* (separate un-correlated sub-clusters; complement to `lulu`),
@@ -1457,9 +1461,6 @@ python3 \
 rm "${NEW_TABLE}"
 ```
 
-- explain cleaving (as a complement to lulu: separate similar
-  sequences that do not co-occur)
-
 
 ### pool expected error values
 
@@ -1475,7 +1476,7 @@ find "${DATA_FOLDER}" -name "*.qual" \
     uniq --check-chars=40 > "${QUALITY_FILE}" &
 ```
 
-The result is a file with three columns:
+The result is a table with three-columns, sorted by increasing length:
 1. amplicon name,
 1. lowest expected error observed for that amplicon,
 1. amplicon length
@@ -1498,7 +1499,7 @@ dca48a272d66c555b06317af2472455db8140237 0.002780 35
 ### distribution
 
 For each unique amplicon in the dataset, record the samples where it
-occurs, and its abundance in that sample:
+occurs, and its abundance in that sample (number of reads):
 
 ```shell
 ## Build distribution file (sequence <-> sample relations)
@@ -1526,8 +1527,9 @@ be8e83ba27fa599c1eccb416e06131870ba101e6	S001	119
 
 ### local cluster representatives
 
-Discard clusters with only two or less reads. This information will be
-used during the cleaving step:
+Earlier in this analysis, we used `swarm` to make a list of clusters
+and cluster seeds present in each sample. Here, we are simply pooling
+these per-sample lists into a single file, adding the sample name:
 
 ```shell
 ## list all cluster seeds of size > 2
@@ -1536,8 +1538,28 @@ find "${DATA_FOLDER}" -name "*.stats" \
     sed 's/^\.\/// ; s/\.stats:/\t/' > "${POTENTIAL_SUB_SEEDS}" &
 ```
 
+This information will be used during the cleaving step:
+
+sample | uniq| abundance | seed | abundance| singletons|layers|steps
+-------|-----|-----|----------------------------------------|----|----|-|-
+L010   | 5897|22010|3db68d2f77252793f23d7089d0d4103eb8942dcb|3612|4600|8|8
+L010   | 5528|15548|45211af6b7811bf45b5d3694054b800b5b13efd4|3728|4488|9|9
+L010   | 3058|13452|47e639615ad19c8dededae45f38beb52c4e9861d|3542|2252|9|9
+L010   | 2172|8268|307ab3d7f513adc74854dd72e817fe02f7601db2|3722|1639|8|8
+L010   | 1453|6754|e52a67c43758a5f9a39b4cb42ac10cf41958e1d4|3563|1053|4|4
+L010   | 1437|8836|962e2976f63ec09db8361ce4a498f50ade4b1674|3712|1046|4|4
+L010   | 1303|6307|79ae1f05f177ad948d18dc86a7944772c63273b9|3559|971|6|6
+L010   | 1126|6032|b0835c4fba3d39e25059371902b0774741e3a57d|3562|748|5|5
+L010   | 759|5355|91be8585fcad245e9f3a53578207c58355426583|3603|540|4|4
+L010   | 743|5981|42871cf2b4deaa78cbd1c163847567685c56d44e|3654|567|4|4
+
 
 ### pool fasta entries
+
+Metabarcoding samples often share some of their amplicons. Find all
+the non-empty fasta files created during the first part of the
+pipeline, and dereplicate them. This is a fast and lossless reduction
+of the volume of our data:
 
 ```shell
 ## global dereplication
@@ -1553,15 +1575,53 @@ find "${DATA_FOLDER}" -name "*.fas" \
         --output "${FINAL_FASTA}"
 ```
 
-Note: we need to dereplicate before clustering. This time we use the
-option `--sizein` to take into account the abundance obtained during
-sample-level dereplications.
+Note: this time we use the option `--sizein` to take into account the
+abundance obtained during sample-level dereplications.
+
+For instance, this fasta entries coming from different samples:
+
+```
+>e2512172abf8cc9f67fdd49eb6cacf2df71bbad3;size=3
+AAAA
+>e2512172abf8cc9f67fdd49eb6cacf2df71bbad3;size=2
+AAAA
+```
+
+will be dereplicated into this one:
+
+```
+>e2512172abf8cc9f67fdd49eb6cacf2df71bbad3;size=5
+AAAA
+```
+
+Dereplication is strongly recommended before clustering with `swarm`!
 
 
 ### clustering
 
-global clustering. I recommend to use d = 1 with the fastidious
-option:
+Global clustering with `swarm`.
+
+Why do we need clustering/denoising?
+
+Amplification and sequencing are **noisy**, and the level of noise is
+directly correlated to the initial abundance of your target sequence:
+
+![seed vs cloud](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/seed_vs_cloud.png)
+
+The number of microvariants (errors?) around a seed (true sequence?)
+is a function of the abundance of the seed. Abundant seeds will be at
+the center of a dense and large cloud of microvariants.
+
+`swarm` will use that. With default parameters, it will generate all
+possible microvariants of an amplicon and simply check if these
+microvariants are present in the dataset and capture them if they
+are. Iteratively.
+
+I recommend to use a local difference of one (`d = 1`) with the
+`--fastidious` option. A local difference of one is `swarm`'s default
+and recommended setting. Combining it with the `--fastidious` option
+is a very good compromise between taxonomical resolution and molecular
+diversity inflation (too many clusters):
 
 ```shell
 ## clustering (swarm 3 or more recent)
@@ -1586,7 +1646,8 @@ files.
 are the number of clusters, the number of unique sequences in the
 largest cluster, and the memory consumption. In its current
 acceptation, the term OTU designates 97%-based clusters. In that
-sense, `swarm` produces ASVs.
+sense, `swarm` produces ASVs (down to a one-nucleotide resolution
+after the cleaving step).
 
 
 ### Chimera detection
@@ -1644,14 +1705,76 @@ field. There is a new chimera detection algorithm in preparation for
 vsearch!
 
 
+### cleaving
+
+This is a procedure I use to post-process `swarm`'s clustering
+results, and to improve our taxonomical resolution down to one
+nucleotide, where necessary.
+
+Where `lulu` groups similar clusters that have the same distribution
+patterns (co-occur in the same samples), cleaving does the complement
+operation. Cleaving separates cluster sub-parts (similar sequences)
+that do not co-occur.
+
+For example, a cluster with two-subparts A and B:
+
+  | s1 | s2 | s3 | s4 | s5 | s6
+--|----|----|----|----|----|---
+A |  9 |  7 |  9 |  0 |  0 |  0
+B |  0 |  0 |  0 |  7 |  8 |  9
+
+A and B do not co-occur, there is some ecological signal
+here. Cleaving will create two separated clusters A and B.
+
+![cleaved cluster](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/grasp_nodD_764_samples_1_OTU_6.pdf)
+
+Cleaving is a fast operation, even for extremely large datasets. No
+artificial diversity inflation, resolution only when necessary.
+
+Cleaving has a visible effect on abundance vs. cloud distributions:
+
+![cleaved cluster](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/grasp_nodD_764_samples_1f.stats.before_after_OTU_breaking.png)
+
+Some outliers (above the average) are separated into sub-components
+that are much closer to the average abundance vs. cloud ratio.
+
+Note : after cleaving, it is necessary to perform a new chimera check.
+
+
 ### build filtered occurrence table
 
-Note: eliminate sequences that are chimeras. In the remaining cluster
-representatives, eliminate those with an abundance of 1. I do not
-recommend to eliminate chimeras before taxonomic assignment. If a
-chimera is 100% identical to a reference sequence, then it is a false
-positive (not a chimera) or a sign that the matching reference should
-be investigated.
+Pool all the information produced above, and build an occurrence
+table:
+
+```shell
+# build OTU table
+python3 \
+    "${SRC}/${OTU_TABLE_BUILDER}" \
+    --representatives <(cat "${OUTPUT_REPRESENTATIVES}"{,2}) \
+    --stats <(cat "${OUTPUT_STATS}"{,2}) \
+    --swarms <(cat "${OUTPUT_SWARMS}"{,2}) \
+    --chimera <(cat "${UCHIME_RESULTS}"{,2}) \
+    --quality "${QUALITY_FILE}" \
+    --assignments <(cat "${TAXONOMIC_ASSIGNMENTS}"{2,}) \
+    --distribution "${DISTRIBUTION_FILE}" > "${OTU_TABLE}"
+```
+
+This python script will also filter out chimeras, clusters with a low
+quality seed, and clusters with a low abundance and seen in only one
+or two samples:
+
+```python
+        if (
+            chimera_status == "N"
+            and high_quality <= EE_threshold
+            and (abundance >= 3 or spread >= 2)
+        ):
+```
+
+Note: eliminating chimeras before taxonomic assignment is a matter of
+discussion. If a chimera is 100% identical to a reference sequence,
+then it is a false positive (not a chimera) or a sign that the
+matching reference should be investigated.
 
 
 ### Taxonomy: last-common ancestor
@@ -1737,13 +1860,3 @@ Content of the OTU table:
 Metabarcoding's main challenge is noise. Bioinformatics tools can
 solve part of the problem, but robust experimental designs with
 replicates and controls are your safest bet.
-
-
-### seed vs cloud
-
-![seed vs cloud](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/seed_vs_cloud.png) <!-- .element height="50%" width="50%" -->
-
-
-### post-super OTU breaking
-
-![before and after](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/grasp_nodD_764_samples_1f.stats.before_after_OTU_breaking.png)
