@@ -113,7 +113,7 @@ command1 input.fastq | \
 ```
 
 A `tee` will duplicate your stream of data, allowing you to do process
-it in two different ways simulatenously. It is possible to connect
+it in two different ways simultaneously. It is possible to connect
 multiple `tee`s and to create a multi-furcation.
 
 
@@ -206,10 +206,10 @@ python --version
 R --version
 ```
 
-`R`, `git` and the compilation toolchain are already installed.
+`R`, `git` and the compilation tool-chain are already installed.
 
 The `gcc` version is a bit old (9.2), and might not allow to compile
-code based on very recent standards (e.g.; `mumu` wich uses C++20
+code based on very recent standards (e.g.; `mumu` which uses C++20
 features).
 
 What about hardware resources?
@@ -463,9 +463,9 @@ export -f subsample
 find . -name "NG-7070_*.fastq.gz" -type f -exec bash -c 'subsample "$0"' {} \;
 ```
 
-Subsampling is useful when you are developping and testing a new
+Subsampling is useful when you are developing and testing a new
 pipeline. The dataset is smaller but remains realistic, allowing for a
-faster developement cycle. With `vsearch`, you can also subsample down
+faster development cycle. With `vsearch`, you can also subsample down
 to a particular number of reads.
 
 Combining `vsearch` with the command `find` offers a very powerful and
@@ -536,7 +536,7 @@ The code below uses named pipes (`fifo`) to avoid writing intermediate
 results to mass storage. The goal is to speed up processing, and to
 make the code more modular and clearer. On the other hand, `fifo`s are
 tricky to use, as you must remember to launch producers and consumers
-in the backgroup before running the last consumer.
+in the background before running the last consumer.
 
 Don't panic! While the script is running, we are going to look at each
 function and explain what it does:
@@ -730,7 +730,7 @@ ADAPTOR-TAG-PRIMER_FORWARD-actual_target_sequence-ESREVER_REMIRP-GAT-ROTPADA
 
 A minimal overlap and similarity is required for the merging. Reads
 that can't be merged are discarded. `vsearch` re-computes the quality
-values of the overlaping positions. An overlap corresponds to a double
+values of the overlapping positions. An overlap corresponds to a double
 observation, and the error probability must then be re-evaluated for
 each position in the overlap. Some mergers do it the wrong way.
 
@@ -966,7 +966,7 @@ that this particular sequence has been observed twice.
 ### list local clusters
 
 Later in this analysis, we will need to search for cluster
-co-occurences on a per-sample basis. For each sample, we quickly
+co-occurrences on a per-sample basis. For each sample, we quickly
 generate clusters and a list of cluster seeds with `swarm` and store
 the results. Here we use `swarm` for the first time, I will give more
 details when `swarm` will be used to process the whole dataset (pooled
@@ -1185,7 +1185,7 @@ name](https://github.com/pr2database/pr2database/issues/37))
 
 With a complete PR2 reference dataset, taxonomic assignment would take
 more than an hour on a Google colab instance (that's the most
-computationaly intensive step in whole the pipeline). To speed up
+computationally intensive step in whole the pipeline). To speed up
 things, I provide a PR2 subset with exactly what we need for the
 Neotropical dataset.
 
@@ -1620,7 +1620,7 @@ are. Iteratively.
 I recommend to use a local difference of one (`d = 1`) with the
 `--fastidious` option. A local difference of one is `swarm`'s default
 and recommended setting. Combining it with the `--fastidious` option
-is a very good compromise between taxonomical resolution and molecular
+is a very good compromise between taxonomic resolution and molecular
 diversity inflation (too many clusters):
 
 ```shell
@@ -1652,7 +1652,7 @@ after the cleaving step).
 
 ### Chimera detection
 
-Chimeras are very frequent in metabarcoding dataset. Their frequence
+Chimeras are very frequent in metabarcoding dataset. Their frequency
 increases with the number of PCR cycles, and it is important to detect
 and remove them. The dominant algorithm today is `uchime` (citation),
 and we are using its `vsearch` implementation.
@@ -1708,7 +1708,7 @@ vsearch!
 ### cleaving
 
 This is a procedure I use to post-process `swarm`'s clustering
-results, and to improve our taxonomical resolution down to one
+results, and to improve our taxonomic resolution down to one
 nucleotide, where necessary.
 
 Where `lulu` groups similar clusters that have the same distribution
@@ -1716,7 +1716,7 @@ patterns (co-occur in the same samples), cleaving does the complement
 operation. Cleaving separates cluster sub-parts (similar sequences)
 that do not co-occur.
 
-For example, a cluster with two-subparts A and B:
+For example, a cluster with two sub-parts A and B:
 
   | s1 | s2 | s3 | s4 | s5 | s6
 --|----|----|----|----|----|---
@@ -1783,7 +1783,7 @@ Brute-force approach! This is the slowest step in the pipeline, by
 far. It can easily be distributed on a large cluster of computers and
 be done under 20 minutes, even for a large dataset. This is the method
 I use in my own projects, but I admit it is not the most efficient,
-and other methods should be explored (naive bayesian classifier,
+and other methods should be explored (naive Bayesian classifier,
 Markov model, etc.):
 
 ```shell
@@ -1874,7 +1874,7 @@ This cluster has a 100% similarity with 244 reference sequences:
 
 This last entry is very likely a misassigned reference sequence, and
 our environmental sequence is probably an Embryophyceae (but not
-maize, as it was collected deep into the Equatorian forest).
+maize, as it was collected deep into the equatorial forest).
 
 
 ### occurrence table
