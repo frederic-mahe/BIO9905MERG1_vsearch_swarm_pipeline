@@ -17,3 +17,12 @@ format, export to a [jupyter](https://jupyter.org/) notebook with
 ``` bash
 pandoc -o pipeline.ipynb pipeline.md
 ```
+
+## Tasks
+
+- [ ] LCA: make a small example,
+- [ ] occurrence table: show some interesting results (all stars, low similarity, short sequences, etc),
+- [ ] explain that the table could be further filtered (length min-max, lulu, etc.),
+- [ ] check for typos and spelling,
+- [ ] export to `.ipynb`,
+- [ ] run one last time on Google colab
