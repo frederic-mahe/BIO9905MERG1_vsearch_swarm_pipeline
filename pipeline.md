@@ -1783,7 +1783,8 @@ Brute-force approach! This is the slowest step in the pipeline, by
 far. It can easily be distributed on a large cluster of computers and
 be done under 20 minutes, even for a large dataset. This is the method
 I use in my own projects, but I admit it is not the most efficient,
-and other methods should be explored (sintax, AI):
+and other methods should be explored (naive bayesian classifier,
+Markov model, etc.):
 
 ```shell
 # search for best hits
@@ -1805,31 +1806,7 @@ ${VSEARCH} \
     --iddef 1 \
     --userout - | \
     sed 's/;size=/_/ ; s/;//' > hits.representatives
-
-# in case of multi-best hit, find the last-common ancestor
-python3 ${SRC}/${STAMPA_MERGE} $(pwd)
 ```
-
-The advantage of this method is the clarity of the results. Since both
-query and reference cover the same genomic region (in-between our
-forward and reverse primers), then we can use a simple similarity
-formula. The similarity percentage is easy to interpret (overlap is
-always 100%).
-
-
-show an example of hits 
-
-The explain the LCA approach.
-
-
-
-if an environmental sequence is equidistant to several reference
-sequences, find the last-common ancestor (part of the taxonomic path
-that is common)
-
-This method is great for finding errors in reference database (show an
-example in the results file : `*` stars everywhere = deep conflict
-
 
 ```
 1462274 nt in 4001 seqs, min 87, max 466, avg 365
@@ -1839,7 +1816,71 @@ Searching 100%
 Matching unique query sequences: 1272 of 1358 (93.67%)
 ```
 
-Content of the OTU table:
+Results:
+
+```
+8e75b9c004b4188ea41b6897b5bfb12af6f36796_3368   77.3    GU319785.1.833_U Eukaryota|TSAR|Alveolata-Apicomplexa|Gregarinomorphea|Cryptogregarinorida|Cryptosporidiidae|Cryptosporidium13|Cryptosporidium13_muris
+8e75b9c004b4188ea41b6897b5bfb12af6f36796_3368   77.3    EU156446.1.816_U Eukaryota|TSAR|Alveolata-Apicomplexa|Gregarinomorphea|Cryptogregarinorida|Cryptosporidiidae|Cryptosporidium15|Cryptosporidium15_sp.
+8e75b9c004b4188ea41b6897b5bfb12af6f36796_3368   77.3    JQ413358.1.796_U Eukaryota|TSAR|Alveolata-Apicomplexa|Gregarinomorphea|Cryptogregarinorida|Cryptosporidiidae|Cryptosporidium13|Cryptosporidium13_muris
+ff365793fda117a3c87f972342d97c8738555133_3419   96.8    AB000647.1.1737_U Eukaryota|Obazoa|Opisthokonta-Fungi|Ascomycota|Saccharomycotina|Saccharomycetales|Galactomyces|Galactomyces_geotrichum
+ff365793fda117a3c87f972342d97c8738555133_3419   96.8    JQ698930.1.1731_U Eukaryota|Obazoa|Opisthokonta-Fungi|Ascomycota|Saccharomycotina|Saccharomycetales|Galactomyces|Galactomyces_geotrichum
+ff365793fda117a3c87f972342d97c8738555133_3419   96.8    U00974.1.1719_U Eukaryota|Obazoa|Opisthokonta-Fungi|Ascomycota|Saccharomycotina|Saccharomycetales|Galactomyces|Galactomyces_geotrichum
+...
+```
+
+The advantage of this method is the clarity of the results. Since both
+query and reference cover the same genomic region (in-between our
+forward and reverse primers), then we can use a simple, easy to
+interpret similarity definition.
+
+As you can see a given environmental amplicon can be assigned to more
+than one reference, and these references can point to different
+taxa. To reflect that uncertain taxonomic assignment, each
+environmental amplicon is assigned to the last-common ancestor of its
+closest references:
+
+```shell
+# in case of multi-best hit, find the last-common ancestor
+python3 ${SRC}/${STAMPA_MERGE} $(pwd)
+```
+
+Resulting in:
+
+```
+8e75b9c004b4188ea41b6897b5bfb12af6f36796_3368   77.3    GU319785.1.833_U,EU156446.1.816_U,JQ413358.1.796_U Eukaryota|TSAR|Alveolata-Apicomplexa|Gregarinomorphea|Cryptogregarinorida|Cryptosporidiidae|*|*
+
+ff365793fda117a3c87f972342d97c8738555133_3419   96.8    AB000647.1.1737_U,JQ698930.1.1731_U,U00974.1.1719_U Eukaryota|Obazoa|Opisthokonta-Fungi|Ascomycota|Saccharomycotina|Saccharomycetales|Galactomyces|Galactomyces_geotrichum
+...
+```
+
+If an environmental sequence is equidistant to several reference
+sequences, the it is assigned to the last-common ancestor (part of the
+taxonomic path that is common) of the references. Conflicting
+assignments are replaced with stars (`*`).
+
+This method is great for finding errors in reference databases. For
+example, the third most-abundant cluster in our dataset
+(`5fc4b348c56e446f6efdd9ee50d6388b8f691915`, with a total of 3,125
+reads) is assigned to `*|*|*|*|*|*|*|*` with a similarity of
+100%.
+
+That's weird, let's have a look.
+
+This cluster has a 100% similarity with 244 reference sequences:
+- 242 references are from an Embryophyceae (*Zea mays*),
+- 2 references are from an unknown Embryophyceae (Embryophyceae XXX sp.),
+- 1 reference is from a Bacteria (*Pseudooceanicola lipolyticus*, an
+  Alphaproteobacteria)
+
+This last entry is very likely a misassigned reference sequence, and
+our environmental sequence is probably an Embryophyceae (but not
+maize, as it was collected deep into the Equatorian forest).
+
+
+### occurrence table
+
+#### structure
+
 1. OTU number
 1. total number of reads
 1. cloud (total number of unique sequences)
@@ -1853,6 +1894,51 @@ Content of the OTU table:
 1. identity (maximum similarity of the OTU representative with reference sequences)
 1. taxonomy (taxonomic assignment of the OTU representative)
 1. references (reference sequences closest to the OTU representative)
+1. sample 1
+1. sample 2
+1. sample...
+
+#### first look at the table
+
+We seen earlier that our third most-abundant cluster was assigned to
+the last-common ancestor `*|*|*|*|*|*|*|*` with a similarity of
+100%. That sequence is probably from a plant.
+
+Our most-abundant cluster is a Fungi (Ascomycota, with 96.8% of
+similarity), as is our fourth-most abundant cluster (Basidiomycota,
+99.7%). These Fungi groups are the two most frequent in soils.
+
+A striking feature is the presence of these abundant and weakly
+assigned clusters (5 out of the 10 most-abundant clusters, 70 to 80%
+similarity with references). These clusters represent a
+yet-to-be-described molecular diversity of Apicomplexans:
+
+| Taxa                     | reads |
+|--------------------------|-------|
+| Alveolata-Apicomplexa    | 24951 |
+| Opisthokonta-Fungi       | 16508 |
+| Streptophyta             | 7417  |
+| Opisthokonta-Metazoa     | 3115  |
+| Rhizaria-Cercozoa        | 1676  |
+| Alveolata-Ciliophora     | 1463  |
+| Stramenopiles-Gyrista    | 587   |
+| Alveolata-Perkinsea      | 465   |
+| Alveolata-Dinoflagellata | 331   |
+
+
+#### additional filters?
+
+As mentioned above, some basic filters were applied to build this
+table. In part 1, only reads that could be merged were kept, as well
+as reads with both primers, reads without Ns, and reads longer than 32
+nucleotide after primer trimming. In part 2, clusters with chimeric
+seed, clusters with a low quality seed, and clusters with a low
+abundance and seen in only one or two samples were discarded?
+
+It is possible to go further, and to discard clusters containing short
+(or too long) sequences, or clusters with a similarity to references
+below a certain threshold, or it is possible to use tools such as
+`lulu`.
 
 
 ## Conclusion
