@@ -23,6 +23,6 @@ pandoc -o pipeline.ipynb pipeline.md
 
 - [ ] is it possible to open the final table in the Google colab
       interface?
-- [ ] check for typos and spelling,
+- [x] check for typos and spelling,
 - [ ] export to `.ipynb`,
 - [ ] run one last time on Google colab
