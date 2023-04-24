@@ -98,7 +98,8 @@ command1 input.fastq | \
     command3 > final_output.fastq
 ```
 
-Note: pipes were recently added to R, C++, and other languages.
+Note: pipes are so useful that they were recently added to R, C++, and
+other languages.
 
 
 #### tee
@@ -496,7 +497,8 @@ cd ./data/
 URL="https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/data"
 
 wget "${URL}/MD5SUM"
-for SAMPLE in B010 B020 B030 B040 B050 B060 B070 B080 B090 B100 L010 L020 L030 L040 L050 L060 L070 L080 L090 L100 ; do
+for SAMPLE in B010 B020 B030 B040 B050 B060 B070 B080 B090 B100 \
+              L010 L020 L030 L040 L050 L060 L070 L080 L090 L100 ; do
     for READ in 1 2 ; do
         wget --continue "${URL}/${SAMPLE}_1_${READ}.fastq.gz"
     done
@@ -525,6 +527,7 @@ is processed individually. And a second part where all samples are
 pooled to produce an occurrence table.
 
 In this first part of the pipeline, we will:
+
 1. merge R1 and R2,
 1. trim primers,
 1. convert fastq to fasta,
@@ -1186,7 +1189,7 @@ name](https://github.com/pr2database/pr2database/issues/37))
 With a complete PR2 reference dataset, taxonomic assignment would take
 more than an hour on a Google colab instance (that's the most
 computationally intensive step in whole the pipeline). To speed up
-things, I provide a PR2 subset with exactly what we need for the
+things, I provide a PR2 subset with exactly what we need to assign the
 Neotropical dataset.
 
 ``` code
@@ -1218,6 +1221,7 @@ is processed individually. And a second part where all samples are
 pooled to produce an occurrence table.
 
 In this second part of the pipeline, we will:
+
 1. pool metadata (amplicon distributions, local clustering results),
 1. pool fasta samples and dereplicate,
 1. clusterize the whole dataset,
@@ -1477,6 +1481,7 @@ find "${DATA_FOLDER}" -name "*.qual" \
 ```
 
 The result is a table with three-columns, sorted by increasing length:
+
 1. amplicon name,
 1. lowest expected error observed for that amplicon,
 1. amplicon length
@@ -1659,8 +1664,8 @@ and we are using its `vsearch` implementation.
 
 To reduce the computational load, we are working with cluster
 representatives, rather than working with the whole fasta
-dataset. Similarly, we are also not checking the chimeric status of
-clusters with only one read (*singletons*):
+dataset. Similarly, we do not check the chimeric status of clusters
+with only one read (*singletons*):
 
 ```shell
 ## chimera detection
@@ -1718,15 +1723,15 @@ that do not co-occur.
 
 For example, a cluster with two sub-parts A and B:
 
-  | s1 | s2 | s3 | s4 | s5 | s6
---|----|----|----|----|----|---
-A |  9 |  7 |  9 |  0 |  0 |  0
-B |  0 |  0 |  0 |  7 |  8 |  9
+cluster | s1 | s2 | s3 | s4 | s5 | s6
+--------|----|----|----|----|----|---
+A       |  9 |  7 |  9 |  0 |  0 |  0
+B       |  0 |  0 |  0 |  7 |  8 |  9
 
 A and B do not co-occur, there is some ecological signal
 here. Cleaving will create two separated clusters A and B.
 
-![cleaved cluster](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/grasp_nodD_764_samples_1_OTU_6.pdf)
+![cleaved cluster](https://github.com/frederic-mahe/BIO9905MERG1_vsearch_swarm_pipeline/raw/main/images/grasp_nodD_764_samples_1_OTU_6.png)
 
 Cleaving is a fast operation, even for extremely large datasets. No
 artificial diversity inflation, resolution only when necessary.
@@ -1743,8 +1748,8 @@ Note : after cleaving, it is necessary to perform a new chimera check.
 
 ### build filtered occurrence table
 
-Pool all the information produced above, and build an occurrence
-table:
+Pool all the information produced above, and use a python script to
+build an occurrence table:
 
 ```shell
 # build OTU table
@@ -1761,7 +1766,7 @@ python3 \
 
 This python script will also filter out chimeras, clusters with a low
 quality seed, and clusters with a low abundance and seen in only one
-or two samples:
+or two samples (using the following code):
 
 ```python
         if (
@@ -1771,10 +1776,10 @@ or two samples:
         ):
 ```
 
-Note: eliminating chimeras before taxonomic assignment is a matter of
-discussion. If a chimera is 100% identical to a reference sequence,
-then it is a false positive (not a chimera) or a sign that the
-matching reference should be investigated.
+Note: eliminating chimeras **before** taxonomic assignment is a matter
+open for discussion. If a chimera is 100% identical to a reference
+sequence, then it could be a false positive (not a chimera) or a sign
+that the matching reference should be investigated.
 
 
 ### Taxonomy: last-common ancestor
@@ -1867,6 +1872,7 @@ reads) is assigned to `*|*|*|*|*|*|*|*` with a similarity of
 That's weird, let's have a look.
 
 This cluster has a 100% similarity with 244 reference sequences:
+
 - 242 references are from an Embryophyceae (*Zea mays*),
 - 2 references are from an unknown Embryophyceae (Embryophyceae XXX sp.),
 - 1 reference is from a Bacteria (*Pseudooceanicola lipolyticus*, an
